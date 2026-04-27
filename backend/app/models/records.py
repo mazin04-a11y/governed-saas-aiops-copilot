@@ -7,10 +7,19 @@ from app.core.database import Base
 from app.core.time import utc_now
 
 
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class SystemMetric(Base):
     __tablename__ = "system_metrics"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(80), default="default", index=True)
     service_name: Mapped[str] = mapped_column(String(120), index=True)
     cpu_usage: Mapped[float] = mapped_column(Float)
     memory_usage: Mapped[float] = mapped_column(Float)
@@ -24,6 +33,7 @@ class AccessLog(Base):
     __tablename__ = "access_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(80), default="default", index=True)
     username: Mapped[str] = mapped_column(String(160), index=True)
     action: Mapped[str] = mapped_column(String(80))
     ip_address: Mapped[str] = mapped_column(String(80), index=True)
@@ -35,6 +45,7 @@ class Incident(Base):
     __tablename__ = "incidents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(80), default="default", index=True)
     incident_type: Mapped[str] = mapped_column(String(80), index=True)
     title: Mapped[str] = mapped_column(String(240))
     severity: Mapped[str] = mapped_column(String(40), index=True)
@@ -51,6 +62,7 @@ class EvidenceLog(Base):
     __tablename__ = "evidence_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(80), default="default", index=True)
     incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id"), nullable=True, index=True)
     evidence_type: Mapped[str] = mapped_column(String(80), index=True)
     source_table: Mapped[str] = mapped_column(String(80))
@@ -64,6 +76,7 @@ class OperationalReport(Base):
     __tablename__ = "operational_reports"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(80), default="default", index=True)
     incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id"), index=True)
     report_version: Mapped[int] = mapped_column(Integer, default=1)
     model_name: Mapped[str] = mapped_column(String(120))
@@ -82,6 +95,7 @@ class Approval(Base):
     __tablename__ = "approvals"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(80), default="default", index=True)
     report_id: Mapped[int] = mapped_column(ForeignKey("operational_reports.id"), index=True)
     status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
     reviewer: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -94,6 +108,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(80), default="default", index=True)
     event_type: Mapped[str] = mapped_column(String(120), index=True)
     actor: Mapped[str] = mapped_column(String(120), default="system")
     entity_type: Mapped[str] = mapped_column(String(120))

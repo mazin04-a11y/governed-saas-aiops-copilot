@@ -2,27 +2,39 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
-from app.models.records import AccessLog, EvidenceLog, Incident, SystemMetric
+from app.models.records import AccessLog, EvidenceLog, Incident, Project, SystemMetric
 from app.schemas.records import AccessLogIn, MetricIn
 from app.services.audit import audit
 
 
-def ingest_metric(session: Session, payload: MetricIn) -> tuple[SystemMetric, Incident | None]:
-    metric = SystemMetric(**payload.model_dump())
+def ensure_project(session: Session, project_id: str) -> Project:
+    project = session.get(Project, project_id)
+    if project:
+        return project
+    project = Project(id=project_id, display_name=project_id)
+    session.add(project)
+    session.flush()
+    return project
+
+
+def ingest_metric(session: Session, payload: MetricIn, project_id: str = "default") -> tuple[SystemMetric, Incident | None]:
+    ensure_project(session, project_id)
+    metric = SystemMetric(project_id=project_id, **payload.model_dump())
     session.add(metric)
     session.flush()
     incident = _detect_performance_incident(session, metric)
-    audit(session, "metric_ingested", "api_key", "system_metric", metric.id, {"service_name": metric.service_name})
+    audit(session, "metric_ingested", "api_key", "system_metric", metric.id, {"service_name": metric.service_name}, project_id)
     session.commit()
     return metric, incident
 
 
-def ingest_access_log(session: Session, payload: AccessLogIn) -> tuple[AccessLog, Incident | None]:
-    access_log = AccessLog(**payload.model_dump())
+def ingest_access_log(session: Session, payload: AccessLogIn, project_id: str = "default") -> tuple[AccessLog, Incident | None]:
+    ensure_project(session, project_id)
+    access_log = AccessLog(project_id=project_id, **payload.model_dump())
     session.add(access_log)
     session.flush()
     incident = _detect_security_incident(session, access_log)
-    audit(session, "access_log_ingested", "api_key", "access_log", access_log.id, {"username": access_log.username})
+    audit(session, "access_log_ingested", "api_key", "access_log", access_log.id, {"username": access_log.username}, project_id)
     session.commit()
     return access_log, incident
 
@@ -32,8 +44,9 @@ def _detect_performance_incident(session: Session, metric: SystemMetric) -> Inci
         return None
 
     severity = "critical" if metric.error_rate >= 10 or metric.response_time_ms >= 2000 else "high"
-    key = f"performance:{metric.service_name}:degraded"
+    key = f"{metric.project_id}:performance:{metric.service_name}:degraded"
     evidence = EvidenceLog(
+        project_id=metric.project_id,
         evidence_type="metric_threshold_breach",
         source_table="system_metrics",
         source_id=metric.id,
@@ -67,13 +80,15 @@ def _detect_security_incident(session: Session, access_log: AccessLog) -> Incide
             AccessLog.ip_address == access_log.ip_address,
             AccessLog.action == "login",
             AccessLog.outcome == "failed",
+            AccessLog.project_id == access_log.project_id,
         )
     )
     if failed_count is None or failed_count < 3:
         return None
 
-    key = f"security:{access_log.username}:{access_log.ip_address}:failed-logins"
+    key = f"{access_log.project_id}:security:{access_log.username}:{access_log.ip_address}:failed-logins"
     evidence = EvidenceLog(
+        project_id=access_log.project_id,
         evidence_type="failed_login_cluster",
         source_table="access_logs",
         source_id=access_log.id,
@@ -100,7 +115,13 @@ def _upsert_incident(
     description: str,
     evidence: EvidenceLog,
 ) -> Incident:
-    incident = session.scalar(select(Incident).where(Incident.correlation_key == correlation_key, Incident.status == "open"))
+    incident = session.scalar(
+        select(Incident).where(
+            Incident.project_id == evidence.project_id,
+            Incident.correlation_key == correlation_key,
+            Incident.status == "open",
+        )
+    )
     session.add(evidence)
     session.flush()
     if incident:
@@ -108,10 +129,11 @@ def _upsert_incident(
         incident.updated_at = utc_now()
         incident.evidence_ids = [*incident.evidence_ids, evidence.id]
         evidence.incident_id = incident.id
-        audit(session, "incident_deduped", "deterministic_detector", "incident", incident.id, {"evidence_id": evidence.id})
+        audit(session, "incident_deduped", "deterministic_detector", "incident", incident.id, {"evidence_id": evidence.id}, evidence.project_id)
         return incident
 
     incident = Incident(
+        project_id=evidence.project_id,
         incident_type=incident_type,
         title=title,
         severity=severity,
@@ -122,5 +144,5 @@ def _upsert_incident(
     session.add(incident)
     session.flush()
     evidence.incident_id = incident.id
-    audit(session, "incident_created", "deterministic_detector", "incident", incident.id, {"evidence_id": evidence.id})
+    audit(session, "incident_created", "deterministic_detector", "incident", incident.id, {"evidence_id": evidence.id}, evidence.project_id)
     return incident

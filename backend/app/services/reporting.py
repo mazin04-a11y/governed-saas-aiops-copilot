@@ -28,11 +28,11 @@ class WorkflowState(TypedDict, total=False):
     report_id: int
 
 
-def build_evidence_bundle(session: Session, incident_id: int) -> list[dict[str, Any]]:
+def build_evidence_bundle(session: Session, incident_id: int, project_id: str = "default") -> list[dict[str, Any]]:
     incident = session.get(Incident, incident_id)
-    if not incident:
+    if not incident or incident.project_id != project_id:
         raise ValueError("incident not found")
-    evidence_rows = session.scalars(select(EvidenceLog).where(EvidenceLog.id.in_(incident.evidence_ids))).all()
+    evidence_rows = session.scalars(select(EvidenceLog).where(EvidenceLog.project_id == project_id, EvidenceLog.id.in_(incident.evidence_ids))).all()
     return [
         {
             "id": row.id,
@@ -46,17 +46,19 @@ def build_evidence_bundle(session: Session, incident_id: int) -> list[dict[str, 
     ]
 
 
-def run_report_workflow(session: Session, incident_id: int, use_external_intel: bool = False) -> OperationalReport:
+def run_report_workflow(session: Session, incident_id: int, use_external_intel: bool = False, project_id: str = "default") -> OperationalReport:
     settings = get_settings()
 
     def build_node(state: WorkflowState) -> WorkflowState:
-        evidence = build_evidence_bundle(session, state["incident_id"])
+        evidence = build_evidence_bundle(session, state["incident_id"], project_id)
         if not evidence:
             raise ValueError("empty evidence bundle blocks LLM report generation")
         return {**state, "evidence": evidence}
 
     def crew_node(state: WorkflowState) -> WorkflowState:
         incident = session.get(Incident, state["incident_id"])
+        if incident is None or incident.project_id != project_id:
+            raise ValueError("incident not found")
         external_context = fetch_external_intel_context(incident, use_external_intel)
         return {
             **state,
@@ -66,6 +68,8 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
 
     def validate_node(state: WorkflowState) -> WorkflowState:
         incident = session.get(Incident, state["incident_id"])
+        if incident is None or incident.project_id != project_id:
+            raise ValueError("incident not found")
         parsed_from_openai = generate_openai_structured_report(incident, state["evidence"], state["crew_analysis"])
         if parsed_from_openai:
             parsed = parsed_from_openai
@@ -94,12 +98,14 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
         next_version = (
             session.scalar(
                 select(func.coalesce(func.max(OperationalReport.report_version), 0) + 1).where(
-                    OperationalReport.incident_id == state["incident_id"]
+                    OperationalReport.project_id == project_id,
+                    OperationalReport.incident_id == state["incident_id"],
                 )
             )
             or 1
         )
         report = OperationalReport(
+            project_id=project_id,
             incident_id=state["incident_id"],
             report_version=next_version,
             model_name=settings.openai_model,
@@ -115,7 +121,7 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
         session.add(report)
         session.flush()
         if approval_required:
-            session.add(Approval(report_id=report.id, status="pending"))
+            session.add(Approval(project_id=project_id, report_id=report.id, status="pending"))
         audit(
             session,
             "operational_report_saved",
@@ -123,6 +129,7 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
             "operational_report",
             report.id,
             {"incident_id": report.incident_id, "approval_required": approval_required},
+            project_id,
         )
         session.commit()
         return {**state, "report_id": report.id}
@@ -131,7 +138,7 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
     try:
         final_state = workflow.invoke({"incident_id": incident_id})
     except ValidationError:
-        audit(session, "operational_report_rejected", "pydantic_validator", "incident", incident_id, {"reason": "invalid_schema"})
+        audit(session, "operational_report_rejected", "pydantic_validator", "incident", incident_id, {"reason": "invalid_schema"}, project_id)
         session.commit()
         raise
     report = session.get(OperationalReport, final_state["report_id"])

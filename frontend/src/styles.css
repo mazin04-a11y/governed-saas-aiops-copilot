@@ -114,7 +114,8 @@ nav button:hover {
   line-height: 1.2;
 }
 
-.keyInput {
+.keyInput,
+.projectInput {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -125,10 +126,21 @@ nav button:hover {
   padding: 10px 12px;
 }
 
-.keyInput input {
+.keyInput input,
+.projectInput input {
   width: 100%;
   border: 0;
   outline: none;
+}
+
+.projectInput {
+  min-width: 220px;
+}
+
+.projectInput span {
+  color: #5c665f;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .sessionButton,
@@ -439,7 +451,8 @@ th {
     grid-template-columns: 1fr;
   }
 
-  .keyInput {
+  .keyInput,
+  .projectInput {
     min-width: 0;
   }
 

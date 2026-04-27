@@ -86,6 +86,25 @@ def test_incident_dedupe(client, auth_headers):
     assert incidents[0]["occurrence_count"] == 2
 
 
+def test_project_boundaries_scope_detection_and_reads(client, auth_headers):
+    payload = {"service_name": "tenant-api", "cpu_usage": 95, "memory_usage": 88, "response_time_ms": 1200, "error_rate": 8}
+    alpha_headers = {**auth_headers, "X-Project-ID": "alpha"}
+    beta_headers = {**auth_headers, "X-Project-ID": "beta"}
+
+    alpha_incident = client.post("/metrics/ingest", json=payload, headers=alpha_headers).json()["incident_id"]
+    beta_incident = client.post("/metrics/ingest", json=payload, headers=beta_headers).json()["incident_id"]
+
+    assert alpha_incident != beta_incident
+    alpha_incidents = client.get("/incidents", headers={"X-Project-ID": "alpha"}).json()
+    beta_incidents = client.get("/incidents", headers={"X-Project-ID": "beta"}).json()
+    assert [incident["project_id"] for incident in alpha_incidents] == ["alpha"]
+    assert [incident["project_id"] for incident in beta_incidents] == ["beta"]
+    assert client.get(f"/incidents/{alpha_incident}", headers={"X-Project-ID": "beta"}).status_code == 404
+
+    projects = {project["id"] for project in client.get("/projects").json()}
+    assert {"alpha", "beta"}.issubset(projects)
+
+
 def test_operator_can_retrieve_incident_evidence(client, auth_headers):
     payload = {"service_name": "evidence-api", "cpu_usage": 95, "memory_usage": 88, "response_time_ms": 1200, "error_rate": 8}
     incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]

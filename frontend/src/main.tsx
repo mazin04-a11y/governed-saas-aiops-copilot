@@ -79,6 +79,8 @@ function App() {
   const [data, setData] = useState<Record<string, Row[]>>({});
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [apiKey, setApiKey] = useState("local-dev-ingest-key");
+  const [projectId, setProjectId] = useState(() => localStorage.getItem("projectId") ?? "default");
+  const [projects, setProjects] = useState<Row[]>([]);
   const [operatorToken, setOperatorToken] = useState(() => localStorage.getItem("operatorToken") ?? "");
   const [loginUsername, setLoginUsername] = useState("operator");
   const [loginPassword, setLoginPassword] = useState("");
@@ -99,18 +101,19 @@ function App() {
     );
     setData(Object.fromEntries(loaded));
     setIncidents(await fetchRows(`${API_BASE}/incidents`));
+    setProjects(await fetchRows(`${API_BASE}/projects`));
   }
 
   useEffect(() => {
     refresh();
-  }, []);
+  }, [projectId]);
 
   const latestRisk = useMemo(() => incidents.filter((item) => item.status === "open").length, [incidents]);
 
   async function sendMetric() {
     const response = await fetch(`${API_BASE}/metrics/ingest`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      headers: { "Content-Type": "application/json", ...apiHeaders() },
       body: JSON.stringify({
         service_name: "checkout-api",
         cpu_usage: 94,
@@ -128,7 +131,7 @@ function App() {
     for (let i = 0; i < 3; i += 1) {
       await fetch(`${API_BASE}/access-logs/ingest`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+        headers: { "Content-Type": "application/json", ...apiHeaders() },
         body: JSON.stringify({ username: "security_user", action: "login", ip_address: "203.0.113.77", outcome: "failed" }),
       });
     }
@@ -203,7 +206,14 @@ function App() {
     const headers: Record<string, string> = {};
     if (apiKey) headers["X-API-Key"] = apiKey;
     if (operatorToken) headers.Authorization = `Bearer ${operatorToken}`;
+    headers["X-Project-ID"] = projectId;
     return headers;
+  }
+
+  function updateProjectId(value: string) {
+    const cleanValue = value.trim() || "default";
+    setProjectId(cleanValue);
+    localStorage.setItem("projectId", cleanValue);
   }
 
   async function fetchRows(url: string) {
@@ -300,6 +310,13 @@ function App() {
           <label className="keyInput">
             <KeyRound size={16} />
             <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} aria-label="Ingest API key" />
+          </label>
+          <label className="projectInput">
+            <span>Project</span>
+            <input list="project-options" value={projectId} onChange={(event) => updateProjectId(event.target.value)} aria-label="Project ID" />
+            <datalist id="project-options">
+              {projects.map((project) => <option value={String(project.id)} key={String(project.id)} />)}
+            </datalist>
           </label>
           {operatorToken ? (
             <button className="sessionButton" onClick={logoutOperator}>Sign out</button>

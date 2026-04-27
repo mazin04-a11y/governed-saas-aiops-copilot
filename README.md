@@ -49,6 +49,7 @@ PostgreSQL audits.
 - optional operator username/password login with signed bearer sessions
 - deterministic performance and failed-login incident detection
 - incident deduplication by correlation key
+- project-scoped ingestion, reads, incident dedupe, reports, approvals, and audit logs via `X-Project-ID`
 - evidence logs linked to incidents
 - incident timeline across evidence, reports, and approvals
 - audited incident resolve/reopen controls
@@ -145,6 +146,10 @@ curl -X POST http://localhost:8000/metrics/ingest \
   -H "Content-Type: application/json" \
   -d '{"service_name":"payment-api","cpu_usage":94,"memory_usage":88,"response_time_ms":1250,"error_rate":7.1,"status":"degraded"}'
 ```
+
+All ingestion and operator endpoints accept an optional `X-Project-ID` header. If omitted,
+the backend uses the `default` project. Project IDs are isolated across metrics, access
+logs, incidents, evidence, reports, approvals, and audit logs.
 
 Ingest failed logins:
 

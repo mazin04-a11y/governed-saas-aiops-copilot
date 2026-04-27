@@ -11,12 +11,22 @@ from fastapi import Header, HTTPException, Request, status
 from app.core.config import get_settings
 
 _request_windows: dict[str, deque[float]] = defaultdict(deque)
+DEFAULT_PROJECT_ID = "default"
 
 
 def require_ingest_api_key(x_api_key: str | None = Header(default=None)) -> None:
     keys = get_settings().api_key_set
     if keys and x_api_key not in keys:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="valid X-API-Key required")
+
+
+def get_project_id(x_project_id: str | None = Header(default=None)) -> str:
+    project_id = (x_project_id or DEFAULT_PROJECT_ID).strip()
+    if not project_id:
+        return DEFAULT_PROJECT_ID
+    if len(project_id) > 80 or not all(char.isalnum() or char in {"-", "_"} for char in project_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid X-Project-ID")
+    return project_id
 
 
 def require_operator_api_key(x_api_key: str | None = Header(default=None)) -> None:

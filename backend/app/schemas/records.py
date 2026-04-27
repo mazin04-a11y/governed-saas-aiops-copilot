@@ -22,6 +22,7 @@ class AccessLogIn(BaseModel):
 
 class IncidentOut(BaseModel):
     id: int
+    project_id: str
     incident_type: str
     title: str
     severity: str
