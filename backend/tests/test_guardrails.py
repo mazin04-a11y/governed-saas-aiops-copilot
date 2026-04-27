@@ -160,6 +160,19 @@ def test_incident_timeline_combines_evidence_and_reports(client, auth_headers):
     assert "report_saved" in event_types
 
 
+def test_operator_can_resolve_incident_with_audit(client, auth_headers):
+    payload = {"service_name": "resolve-api", "cpu_usage": 95, "memory_usage": 91, "response_time_ms": 1300, "error_rate": 7}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+    response = client.patch(
+        f"/incidents/{incident_id}/status",
+        json={"status": "resolved", "actor": "operator", "reason": "Mitigation validated."},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "resolved"
+    audit_rows = client.get("/audit-logs").json()
+    assert any(row["event_type"] == "incident_resolved" and row["entity_id"] == incident_id for row in audit_rows)
+
+
 def test_external_intel_context_does_not_create_incidents(client):
     response = client.get("/incidents")
     assert response.status_code == 200

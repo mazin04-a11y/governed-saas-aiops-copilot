@@ -50,6 +50,7 @@ PostgreSQL audits.
 - incident deduplication by correlation key
 - evidence logs linked to incidents
 - incident timeline across evidence, reports, and approvals
+- audited incident resolve/reopen controls
 - optional Serper external-intel context inside report generation
 - OpenAI Responses API structured-output path when `OPENAI_API_KEY` is configured
 - LangGraph workflow nodes:

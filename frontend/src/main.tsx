@@ -146,6 +146,20 @@ function App() {
     setTimelineRows(rows);
   }
 
+  async function setIncidentStatus(incidentId: number, status: "open" | "resolved") {
+    const response = await fetch(`${API_BASE}/incidents/${incidentId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...apiHeaders() },
+      body: JSON.stringify({
+        status,
+        actor: "operator",
+        reason: status === "resolved" ? "Resolved from operator dashboard." : "Reopened from operator dashboard.",
+      }),
+    });
+    setMessage(response.ok ? `Incident ${status}.` : `Incident update failed: ${response.status}`);
+    refresh();
+  }
+
   function apiHeaders() {
     return apiKey ? { "X-API-Key": apiKey } : undefined;
   }
@@ -223,7 +237,13 @@ function App() {
         {active === "metrics" && <Table title="Metrics" rows={data.metrics ?? []} />}
         {active === "security" && <Table title="Access Logs" rows={data["access-logs"] ?? []} />}
         {active === "incidents" && (
-          <Incidents incidents={incidents} onCreateReport={createReport} onShowEvidence={showEvidence} onShowTimeline={showTimeline} />
+          <Incidents
+            incidents={incidents}
+            onCreateReport={createReport}
+            onShowEvidence={showEvidence}
+            onShowTimeline={showTimeline}
+            onSetStatus={setIncidentStatus}
+          />
         )}
         {active === "reports" && <Reports rows={(data.reports ?? []) as ReportRow[]} onShowEvidence={showEvidence} />}
         {active === "approvals" && (
@@ -258,11 +278,13 @@ function Incidents({
   onCreateReport,
   onShowEvidence,
   onShowTimeline,
+  onSetStatus,
 }: {
   incidents: Incident[];
   onCreateReport: (id: number) => void;
   onShowEvidence: (kind: "incidents" | "reports", id: number) => void;
   onShowTimeline: (id: number) => void;
+  onSetStatus: (id: number, status: "open" | "resolved") => void;
 }) {
   return (
     <section className="list">
@@ -276,6 +298,9 @@ function Incidents({
           <div className="decisionActions">
             <button onClick={() => onShowEvidence("incidents", incident.id)}>Evidence</button>
             <button onClick={() => onShowTimeline(incident.id)}>Timeline</button>
+            <button onClick={() => onSetStatus(incident.id, incident.status === "open" ? "resolved" : "open")}>
+              {incident.status === "open" ? "Resolve" : "Reopen"}
+            </button>
             <button onClick={() => onCreateReport(incident.id)}>Generate report</button>
           </div>
         </article>

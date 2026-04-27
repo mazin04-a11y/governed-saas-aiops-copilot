@@ -70,3 +70,8 @@ class ApprovalDecisionIn(BaseModel):
 class ReportRequest(BaseModel):
     use_external_intel: bool = False
 
+
+class IncidentStatusUpdate(BaseModel):
+    status: Literal["open", "resolved"]
+    actor: str = Field(default="operator", min_length=1, max_length=120)
+    reason: str = Field(min_length=1, max_length=500)

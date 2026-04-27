@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import rate_limit, require_ingest_api_key, require_operator_api_key
 from app.core.database import get_session
 from app.models.records import AccessLog, Approval, AuditLog, EvidenceLog, Incident, OperationalReport, SystemMetric
-from app.schemas.records import AccessLogIn, ApprovalDecisionIn, IncidentOut, MetricIn, ReportRequest
+from app.schemas.records import AccessLogIn, ApprovalDecisionIn, IncidentOut, IncidentStatusUpdate, MetricIn, ReportRequest
 from app.services.audit import audit
 from app.services.detection import ingest_access_log, ingest_metric
 from app.services.reporting import run_report_workflow
@@ -127,6 +127,25 @@ def get_incident_timeline(incident_id: int, session: Session = Depends(get_sessi
             )
 
     return sorted(events, key=lambda item: item["timestamp"], reverse=True)
+
+
+@router.patch("/incidents/{incident_id}/status", dependencies=operator_read)
+def update_incident_status(incident_id: int, payload: IncidentStatusUpdate, session: Session = Depends(get_session)) -> dict:
+    incident = session.get(Incident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="incident not found")
+    incident.status = payload.status
+    incident.updated_at = datetime.utcnow()
+    audit(
+        session,
+        f"incident_{payload.status}",
+        payload.actor,
+        "incident",
+        incident.id,
+        {"reason": payload.reason},
+    )
+    session.commit()
+    return {"incident_id": incident.id, "status": incident.status}
 
 
 @router.post("/incidents/{incident_id}/reports")
