@@ -11,6 +11,12 @@ def test_no_data_creates_no_incidents(client):
     assert response.json() == []
 
 
+def test_request_id_header_is_returned(client):
+    response = client.get("/health", headers={"X-Request-ID": "test-correlation-id"})
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "test-correlation-id"
+
+
 def test_api_key_required_for_ingestion(client):
     response = client.post(
         "/metrics/ingest",
