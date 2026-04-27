@@ -105,6 +105,15 @@ Then open:
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
 
+## Database Migrations
+
+For local MVP bootstrapping, the API can create missing tables on startup. For production-style environments, use Alembic migrations:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
 ## API Examples
 
 Ingest a degraded service metric:

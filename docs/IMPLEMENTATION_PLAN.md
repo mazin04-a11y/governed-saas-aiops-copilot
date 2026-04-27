@@ -41,7 +41,7 @@ Status: planned.
 
 Status: in progress.
 
-- Add Alembic migrations.
+- Alembic migration scaffold and initial schema migration are implemented.
 - Add authentication for dashboard/API reads.
 - Move rate limiting to Redis or gateway infrastructure for multi-instance deployments.
 - Add structured logging and request correlation IDs.
