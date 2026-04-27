@@ -73,6 +73,62 @@ def list_incident_evidence(incident_id: int, session: Session = Depends(get_sess
     return [_row_dict(row) for row in rows]
 
 
+@router.get("/incidents/{incident_id}/timeline", dependencies=operator_read)
+def get_incident_timeline(incident_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    incident = session.get(Incident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="incident not found")
+
+    events = [
+        {
+            "timestamp": incident.created_at.isoformat(),
+            "event_type": "incident_created",
+            "title": incident.title,
+            "details": {"severity": incident.severity, "correlation_key": incident.correlation_key},
+        }
+    ]
+    evidence_rows = session.scalars(select(EvidenceLog).where(EvidenceLog.incident_id == incident_id)).all()
+    for row in evidence_rows:
+        events.append(
+            {
+                "timestamp": row.created_at.isoformat(),
+                "event_type": f"evidence:{row.evidence_type}",
+                "title": row.summary,
+                "details": row.payload,
+            }
+        )
+
+    reports = session.scalars(select(OperationalReport).where(OperationalReport.incident_id == incident_id)).all()
+    report_ids = [report.id for report in reports]
+    for report in reports:
+        events.append(
+            {
+                "timestamp": report.created_at.isoformat(),
+                "event_type": "report_saved",
+                "title": f"Report v{report.report_version} saved",
+                "details": {
+                    "report_id": report.id,
+                    "validation_status": report.validation_status,
+                    "approval_required": report.human_approval_required,
+                },
+            }
+        )
+
+    if report_ids:
+        approvals = session.scalars(select(Approval).where(Approval.report_id.in_(report_ids))).all()
+        for approval in approvals:
+            events.append(
+                {
+                    "timestamp": (approval.decided_at or approval.created_at).isoformat(),
+                    "event_type": f"approval:{approval.status}",
+                    "title": f"Approval {approval.status} for report {approval.report_id}",
+                    "details": {"reviewer": approval.reviewer, "decision_reason": approval.decision_reason},
+                }
+            )
+
+    return sorted(events, key=lambda item: item["timestamp"], reverse=True)
+
+
 @router.post("/incidents/{incident_id}/reports")
 def create_report(incident_id: int, payload: ReportRequest | None = None, session: Session = Depends(get_session)) -> dict:
     try:

@@ -270,6 +270,23 @@ nav button:hover {
   font-size: 12px;
 }
 
+.timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.timelineEvent {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid #f0b35b;
+  padding: 8px 0 8px 12px;
+}
+
+.timelineEvent span {
+  color: #6a746d;
+  font-size: 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

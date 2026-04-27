@@ -54,6 +54,6 @@ Status: planned.
 
 - Add tenant/project boundaries.
 - Add streaming or scheduled data collection integrations.
-- Add richer metrics visualizations and incident timelines.
+- Incident timelines across evidence, reports, and approvals are implemented.
 - Add external-intel source provenance in reports.
 - Add policy packs for different SaaS operating models.

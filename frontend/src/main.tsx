@@ -63,6 +63,8 @@ function App() {
   const [message, setMessage] = useState("");
   const [evidenceTitle, setEvidenceTitle] = useState("");
   const [evidenceRows, setEvidenceRows] = useState<Row[]>([]);
+  const [timelineTitle, setTimelineTitle] = useState("");
+  const [timelineRows, setTimelineRows] = useState<Row[]>([]);
 
   async function refresh() {
     const endpoints = ["metrics", "access-logs", "reports", "approvals", "audit-logs"];
@@ -136,6 +138,12 @@ function App() {
     const rows = await fetch(`${API_BASE}/${kind}/${id}/evidence`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
     setEvidenceTitle(`${kind === "incidents" ? "Incident" : "Report"} ${id} evidence`);
     setEvidenceRows(rows);
+  }
+
+  async function showTimeline(incidentId: number) {
+    const rows = await fetch(`${API_BASE}/incidents/${incidentId}/timeline`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
+    setTimelineTitle(`Incident ${incidentId} timeline`);
+    setTimelineRows(rows);
   }
 
   function apiHeaders() {
@@ -215,7 +223,7 @@ function App() {
         {active === "metrics" && <Table title="Metrics" rows={data.metrics ?? []} />}
         {active === "security" && <Table title="Access Logs" rows={data["access-logs"] ?? []} />}
         {active === "incidents" && (
-          <Incidents incidents={incidents} onCreateReport={createReport} onShowEvidence={showEvidence} />
+          <Incidents incidents={incidents} onCreateReport={createReport} onShowEvidence={showEvidence} onShowTimeline={showTimeline} />
         )}
         {active === "reports" && <Reports rows={(data.reports ?? []) as ReportRow[]} onShowEvidence={showEvidence} />}
         {active === "approvals" && (
@@ -224,6 +232,9 @@ function App() {
         {active === "audit" && <Audit rows={data["audit-logs"] ?? []} onExport={exportAuditCsv} />}
         {evidenceTitle && (
           <EvidencePanel title={evidenceTitle} rows={evidenceRows} onClose={() => setEvidenceTitle("")} />
+        )}
+        {timelineTitle && (
+          <TimelinePanel title={timelineTitle} rows={timelineRows} onClose={() => setTimelineTitle("")} />
         )}
       </section>
     </main>
@@ -246,10 +257,12 @@ function Incidents({
   incidents,
   onCreateReport,
   onShowEvidence,
+  onShowTimeline,
 }: {
   incidents: Incident[];
   onCreateReport: (id: number) => void;
   onShowEvidence: (kind: "incidents" | "reports", id: number) => void;
+  onShowTimeline: (id: number) => void;
 }) {
   return (
     <section className="list">
@@ -262,11 +275,36 @@ function Incidents({
           </div>
           <div className="decisionActions">
             <button onClick={() => onShowEvidence("incidents", incident.id)}>Evidence</button>
+            <button onClick={() => onShowTimeline(incident.id)}>Timeline</button>
             <button onClick={() => onCreateReport(incident.id)}>Generate report</button>
           </div>
         </article>
       ))}
       {incidents.length === 0 && <Empty text="No incidents. Connect data through the protected ingestion API." />}
+    </section>
+  );
+}
+
+function TimelinePanel({ title, rows, onClose }: { title: string; rows: Row[]; onClose: () => void }) {
+  return (
+    <section className="evidencePanel">
+      <div className="panelHeader">
+        <h3>{title}</h3>
+        <button onClick={onClose}>Close</button>
+      </div>
+      {rows.length === 0 ? (
+        <Empty text="No timeline events found." />
+      ) : (
+        <div className="timeline">
+          {rows.map((row, index) => (
+            <article className="timelineEvent" key={`${String(row.event_type)}-${index}`}>
+              <span>{String(row.timestamp ?? "")}</span>
+              <strong>{String(row.event_type ?? "")}</strong>
+              <p>{String(row.title ?? "")}</p>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

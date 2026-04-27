@@ -148,6 +148,18 @@ def test_regenerated_reports_increment_version(client, auth_headers):
     assert reports[second]["report_version"] == 2
 
 
+def test_incident_timeline_combines_evidence_and_reports(client, auth_headers):
+    payload = {"service_name": "timeline-api", "cpu_usage": 95, "memory_usage": 91, "response_time_ms": 1300, "error_rate": 7}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+    client.post(f"/incidents/{incident_id}/reports", json={})
+    response = client.get(f"/incidents/{incident_id}/timeline")
+    assert response.status_code == 200
+    event_types = {item["event_type"] for item in response.json()}
+    assert "incident_created" in event_types
+    assert "evidence:metric_threshold_breach" in event_types
+    assert "report_saved" in event_types
+
+
 def test_external_intel_context_does_not_create_incidents(client):
     response = client.get("/incidents")
     assert response.status_code == 200
