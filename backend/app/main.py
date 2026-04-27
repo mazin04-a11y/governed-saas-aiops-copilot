@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,11 +8,18 @@ from app.core.database import init_db
 from app.core.request_context import RequestIdMiddleware
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Governed SaaS AIOps Copilot",
         description="Evidence-grounded SaaS monitoring copilot with LangGraph, CrewAI, approval gates, and auditability.",
         version="0.1.0",
+        lifespan=lifespan,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -21,10 +30,6 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     app.include_router(router)
-
-    @app.on_event("startup")
-    def _startup() -> None:
-        init_db()
 
     return app
 
