@@ -21,8 +21,14 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://aiops:aiops@postgres:5432/governed_aiops}
       INGEST_API_KEYS: ${INGEST_API_KEYS:-local-dev-ingest-key}
+      OPERATOR_API_KEYS: ${OPERATOR_API_KEYS:-}
+      OPERATOR_USERNAME: ${OPERATOR_USERNAME:-operator}
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-}
+      OPERATOR_SESSION_SECRET: ${OPERATOR_SESSION_SECRET:-local-dev-session-secret-change-me}
+      OPERATOR_SESSION_TTL_SECONDS: ${OPERATOR_SESSION_TTL_SECONDS:-3600}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      CREWAI_EXECUTION_ENABLED: ${CREWAI_EXECUTION_ENABLED:-true}
       SERPER_API_KEY: ${SERPER_API_KEY:-}
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-120}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
@@ -47,4 +53,3 @@ services:
 
 volumes:
   postgres_data:
-

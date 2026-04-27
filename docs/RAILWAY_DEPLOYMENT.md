@@ -22,21 +22,25 @@ Required variables:
 DATABASE_URL=<Railway Postgres connection string>
 INGEST_API_KEYS=<generated comma-separated ingestion keys>
 OPERATOR_API_KEYS=<optional generated comma-separated operator dashboard keys>
+OPERATOR_USERNAME=operator
+OPERATOR_PASSWORD=<optional dashboard login password>
+OPERATOR_SESSION_SECRET=<generated session signing secret>
+OPERATOR_SESSION_TTL_SECONDS=3600
 OPENAI_API_KEY=<OpenAI key, optional for deterministic fallback>
 OPENAI_MODEL=gpt-4.1-mini
+CREWAI_EXECUTION_ENABLED=true
 SERPER_API_KEY=<optional>
 RATE_LIMIT_REQUESTS=120
 RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
-Run migrations before production traffic:
+The backend container runs Alembic migrations during startup before serving API traffic:
 
 ```bash
-cd backend
 alembic upgrade head
 ```
 
-The app still creates missing tables on startup for MVP convenience, but Alembic is the production-style path.
+The app still creates missing tables on startup for MVP convenience, but Alembic is the production-style path and is included in the backend image.
 
 ## Frontend Service
 
@@ -75,6 +79,16 @@ Protected ingestion should accept valid keys:
 ```bash
 curl -X POST https://<backend-service>.up.railway.app/metrics/ingest \
   -H "X-API-Key: <ingest-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"service_name":"payment-api","cpu_usage":94,"memory_usage":88,"response_time_ms":1250,"error_rate":7.1,"status":"degraded"}'
+```
+
+Project-scoped ingestion should isolate records:
+
+```bash
+curl -X POST https://<backend-service>.up.railway.app/metrics/ingest \
+  -H "X-API-Key: <ingest-key>" \
+  -H "X-Project-ID: prod" \
   -H "Content-Type: application/json" \
   -d '{"service_name":"payment-api","cpu_usage":94,"memory_usage":88,"response_time_ms":1250,"error_rate":7.1,"status":"degraded"}'
 ```
