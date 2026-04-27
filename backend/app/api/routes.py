@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import rate_limit, require_ingest_api_key
+from app.api.dependencies import rate_limit, require_ingest_api_key, require_operator_api_key
 from app.core.database import get_session
 from app.models.records import AccessLog, Approval, AuditLog, EvidenceLog, Incident, OperationalReport, SystemMetric
 from app.schemas.records import AccessLogIn, ApprovalDecisionIn, IncidentOut, MetricIn, ReportRequest
@@ -14,6 +14,7 @@ from app.services.detection import ingest_access_log, ingest_metric
 from app.services.reporting import run_report_workflow
 
 router = APIRouter()
+operator_read = [Depends(require_operator_api_key)]
 
 
 @router.get("/health")
@@ -33,24 +34,24 @@ def access_logs_ingest(payload: AccessLogIn, session: Session = Depends(get_sess
     return {"access_log_id": access_log.id, "incident_id": incident.id if incident else None}
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=operator_read)
 def list_metrics(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(SystemMetric).order_by(desc(SystemMetric.created_at)).limit(100)).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/access-logs")
+@router.get("/access-logs", dependencies=operator_read)
 def list_access_logs(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(AccessLog).order_by(desc(AccessLog.created_at)).limit(100)).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/incidents", response_model=list[IncidentOut])
+@router.get("/incidents", response_model=list[IncidentOut], dependencies=operator_read)
 def list_incidents(session: Session = Depends(get_session)):
     return session.scalars(select(Incident).order_by(desc(Incident.updated_at))).all()
 
 
-@router.get("/incidents/{incident_id}")
+@router.get("/incidents/{incident_id}", dependencies=operator_read)
 def get_incident(incident_id: int, session: Session = Depends(get_session)) -> dict:
     incident = session.get(Incident, incident_id)
     if not incident:
@@ -58,7 +59,7 @@ def get_incident(incident_id: int, session: Session = Depends(get_session)) -> d
     return _row_dict(incident)
 
 
-@router.get("/incidents/{incident_id}/evidence")
+@router.get("/incidents/{incident_id}/evidence", dependencies=operator_read)
 def list_incident_evidence(incident_id: int, session: Session = Depends(get_session)) -> list[dict]:
     incident = session.get(Incident, incident_id)
     if not incident:
@@ -80,13 +81,13 @@ def create_report(incident_id: int, payload: ReportRequest | None = None, sessio
     return {"report_id": report.id, "human_approval_required": report.human_approval_required}
 
 
-@router.get("/reports")
+@router.get("/reports", dependencies=operator_read)
 def list_reports(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(OperationalReport).order_by(desc(OperationalReport.created_at))).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/reports/{report_id}")
+@router.get("/reports/{report_id}", dependencies=operator_read)
 def get_report(report_id: int, session: Session = Depends(get_session)) -> dict:
     report = session.get(OperationalReport, report_id)
     if not report:
@@ -94,7 +95,7 @@ def get_report(report_id: int, session: Session = Depends(get_session)) -> dict:
     return _row_dict(report)
 
 
-@router.get("/reports/{report_id}/evidence")
+@router.get("/reports/{report_id}/evidence", dependencies=operator_read)
 def list_report_evidence(report_id: int, session: Session = Depends(get_session)) -> list[dict]:
     report = session.get(OperationalReport, report_id)
     if not report:
@@ -105,7 +106,7 @@ def list_report_evidence(report_id: int, session: Session = Depends(get_session)
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/approvals")
+@router.get("/approvals", dependencies=operator_read)
 def list_approvals(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(Approval).order_by(desc(Approval.created_at))).all()
     return [_row_dict(row) for row in rows]
@@ -137,7 +138,7 @@ def decide_approval(approval_id: int, payload: ApprovalDecisionIn, session: Sess
     return {"approval_id": approval.id, "status": approval.status}
 
 
-@router.get("/audit-logs")
+@router.get("/audit-logs", dependencies=operator_read)
 def list_audit_logs(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(200)).all()
     return [_row_dict(row) for row in rows]

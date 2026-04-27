@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+pysqlite:///./governed_aiops.db"
     ingest_api_keys: str = "local-dev-ingest-key"
+    operator_api_keys: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
     serper_api_key: str | None = None
@@ -21,8 +22,11 @@ class Settings(BaseSettings):
     def api_key_set(self) -> set[str]:
         return {key.strip() for key in self.ingest_api_keys.split(",") if key.strip()}
 
+    @property
+    def operator_key_set(self) -> set[str]:
+        return {key.strip() for key in self.operator_api_keys.split(",") if key.strip()}
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

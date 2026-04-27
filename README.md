@@ -45,6 +45,7 @@ PostgreSQL audits.
 
 - `POST /metrics/ingest`, protected by `X-API-Key`
 - `POST /access-logs/ingest`, protected by `X-API-Key`
+- optional operator read API protection with `OPERATOR_API_KEYS`
 - deterministic performance and failed-login incident detection
 - incident deduplication by correlation key
 - evidence logs linked to incidents
@@ -84,6 +85,7 @@ Copy `.env.example` to `.env` and fill values locally:
 ```bash
 DATABASE_URL=postgresql+psycopg://aiops:aiops@postgres:5432/governed_aiops
 INGEST_API_KEYS=local-dev-ingest-key
+OPERATOR_API_KEYS=
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
 SERPER_API_KEY=

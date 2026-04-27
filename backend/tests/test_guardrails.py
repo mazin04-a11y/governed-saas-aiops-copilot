@@ -1,4 +1,5 @@
 from app.core import database
+from app.core.config import get_settings
 from app.models.records import Incident
 from app.schemas.records import OperationalReportPayload
 from app.services.reporting import generate_structured_output, run_report_workflow
@@ -15,6 +16,17 @@ def test_request_id_header_is_returned(client):
     response = client.get("/health", headers={"X-Request-ID": "test-correlation-id"})
     assert response.status_code == 200
     assert response.headers["X-Request-ID"] == "test-correlation-id"
+
+
+def test_operator_api_key_can_protect_read_endpoints(client, monkeypatch):
+    monkeypatch.setenv("OPERATOR_API_KEYS", "operator-key")
+    get_settings.cache_clear()
+    try:
+        assert client.get("/incidents").status_code == 401
+        assert client.get("/incidents", headers={"X-API-Key": "operator-key"}).status_code == 200
+    finally:
+        monkeypatch.delenv("OPERATOR_API_KEYS", raising=False)
+        get_settings.cache_clear()
 
 
 def test_api_key_required_for_ingestion(client):

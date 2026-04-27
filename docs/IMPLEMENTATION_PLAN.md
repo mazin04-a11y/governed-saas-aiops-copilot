@@ -42,7 +42,7 @@ Status: planned.
 Status: in progress.
 
 - Alembic migration scaffold and initial schema migration are implemented.
-- Add authentication for dashboard/API reads.
+- Optional operator API-key protection is implemented for dashboard/read APIs.
 - Move rate limiting to Redis or gateway infrastructure for multi-instance deployments.
 - Request correlation IDs are implemented with `X-Request-ID`.
 - CI runs backend tests, frontend build, and repository hygiene checks.

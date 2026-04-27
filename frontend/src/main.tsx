@@ -66,10 +66,10 @@ function App() {
   async function refresh() {
     const endpoints = ["metrics", "access-logs", "reports", "approvals", "audit-logs"];
     const loaded = await Promise.all(
-      endpoints.map(async (name) => [name, await fetch(`${API_BASE}/${name}`).then((r) => r.json()).catch(() => [])] as const),
+      endpoints.map(async (name) => [name, await fetch(`${API_BASE}/${name}`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => [])] as const),
     );
     setData(Object.fromEntries(loaded));
-    setIncidents(await fetch(`${API_BASE}/incidents`).then((r) => r.json()).catch(() => []));
+    setIncidents(await fetch(`${API_BASE}/incidents`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []));
   }
 
   useEffect(() => {
@@ -132,9 +132,13 @@ function App() {
   }
 
   async function showEvidence(kind: "incidents" | "reports", id: number) {
-    const rows = await fetch(`${API_BASE}/${kind}/${id}/evidence`).then((r) => r.json()).catch(() => []);
+    const rows = await fetch(`${API_BASE}/${kind}/${id}/evidence`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
     setEvidenceTitle(`${kind === "incidents" ? "Incident" : "Report"} ${id} evidence`);
     setEvidenceRows(rows);
+  }
+
+  function apiHeaders() {
+    return apiKey ? { "X-API-Key": apiKey } : undefined;
   }
 
   return (

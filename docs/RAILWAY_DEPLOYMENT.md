@@ -21,6 +21,7 @@ Required variables:
 ```bash
 DATABASE_URL=<Railway Postgres connection string>
 INGEST_API_KEYS=<generated comma-separated ingestion keys>
+OPERATOR_API_KEYS=<optional generated comma-separated operator dashboard keys>
 OPENAI_API_KEY=<OpenAI key, optional for deterministic fallback>
 OPENAI_MODEL=gpt-4.1-mini
 SERPER_API_KEY=<optional>
@@ -87,4 +88,3 @@ https://<frontend-service>.up.railway.app
 ## Honest Product Boundary
 
 This deployment is a governed SaaS AIOps copilot MVP. It supports real ingestion, deterministic incident detection, evidence-grounded report generation, approval gates, and audit logs. It is not autonomous remediation and not a Datadog/New Relic replacement.
-
