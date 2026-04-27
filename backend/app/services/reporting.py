@@ -12,6 +12,7 @@ from app.schemas.records import OperationalReportPayload, OperationalRecommendat
 from app.services.audit import audit
 from app.services.external_intel import fetch_external_intel_context
 from app.services.openai_reports import generate_openai_structured_report
+from app.services.risk_policy import report_requires_approval
 
 
 class WorkflowState(TypedDict, total=False):
@@ -75,7 +76,7 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
 
     def safety_node(state: WorkflowState) -> WorkflowState:
         parsed = state["parsed_report"]
-        approval_required = any(item.requires_human_approval or item.risk_level == "high" for item in parsed.recommendations)
+        approval_required = report_requires_approval(parsed.recommendations)
         return {**state, "approval_required": approval_required}
 
     def approval_node(state: WorkflowState) -> WorkflowState:

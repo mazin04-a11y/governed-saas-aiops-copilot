@@ -3,6 +3,7 @@ from app.core.config import get_settings
 from app.models.records import Incident
 from app.schemas.records import OperationalReportPayload
 from app.services.reporting import generate_structured_output, run_report_workflow
+from app.services.risk_policy import recommendation_requires_approval
 from pydantic import ValidationError
 
 
@@ -119,6 +120,28 @@ def test_unsafe_remediation_requires_approval_or_rejection():
     assert report.recommendations[0].requires_human_approval is True
 
 
+def test_policy_flags_production_recommendations_for_approval():
+    recommendation = OperationalReportPayload.model_validate(
+        {
+            "incident_id": 1,
+            "executive_summary": "Evidence supports a production-impacting mitigation.",
+            "evidence_ids": [1],
+            "root_cause_hypotheses": ["Metric evidence indicates service degradation."],
+            "risk_assessment": "The action may affect production availability.",
+            "recommendations": [
+                {
+                    "title": "Restart production service",
+                    "rationale": "Restart the production service after operator review.",
+                    "risk_level": "medium",
+                    "requires_human_approval": False,
+                }
+            ],
+            "confidence": 0.7,
+        }
+    ).recommendations[0]
+    assert recommendation_requires_approval(recommendation) is True
+
+
 def test_high_risk_recommendations_remain_pending(client, auth_headers):
     payload = {"service_name": "checkout-api", "cpu_usage": 95, "memory_usage": 91, "response_time_ms": 1300, "error_rate": 7}
     incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
@@ -136,6 +159,15 @@ def test_operator_can_retrieve_report_evidence(client, auth_headers):
     response = client.get(f"/reports/{report_id}/evidence")
     assert response.status_code == 200
     assert response.json()[0]["incident_id"] == incident_id
+
+
+def test_operator_can_retrieve_report_approval_history(client, auth_headers):
+    payload = {"service_name": "approval-history-api", "cpu_usage": 95, "memory_usage": 91, "response_time_ms": 1300, "error_rate": 7}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+    report_id = client.post(f"/incidents/{incident_id}/reports", json={}).json()["report_id"]
+    response = client.get(f"/reports/{report_id}/approvals")
+    assert response.status_code == 200
+    assert response.json()[0]["report_id"] == report_id
 
 
 def test_regenerated_reports_increment_version(client, auth_headers):

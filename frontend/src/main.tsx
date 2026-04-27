@@ -65,6 +65,8 @@ function App() {
   const [evidenceRows, setEvidenceRows] = useState<Row[]>([]);
   const [timelineTitle, setTimelineTitle] = useState("");
   const [timelineRows, setTimelineRows] = useState<Row[]>([]);
+  const [historyTitle, setHistoryTitle] = useState("");
+  const [historyRows, setHistoryRows] = useState<Row[]>([]);
 
   async function refresh() {
     const endpoints = ["metrics", "access-logs", "reports", "approvals", "audit-logs"];
@@ -144,6 +146,12 @@ function App() {
     const rows = await fetch(`${API_BASE}/incidents/${incidentId}/timeline`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
     setTimelineTitle(`Incident ${incidentId} timeline`);
     setTimelineRows(rows);
+  }
+
+  async function showApprovalHistory(reportId: number) {
+    const rows = await fetch(`${API_BASE}/reports/${reportId}/approvals`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
+    setHistoryTitle(`Report ${reportId} approval history`);
+    setHistoryRows(rows);
   }
 
   async function setIncidentStatus(incidentId: number, status: "open" | "resolved") {
@@ -245,7 +253,9 @@ function App() {
             onSetStatus={setIncidentStatus}
           />
         )}
-        {active === "reports" && <Reports rows={(data.reports ?? []) as ReportRow[]} onShowEvidence={showEvidence} />}
+        {active === "reports" && (
+          <Reports rows={(data.reports ?? []) as ReportRow[]} onShowEvidence={showEvidence} onShowApprovalHistory={showApprovalHistory} />
+        )}
         {active === "approvals" && (
           <Approvals rows={(data.approvals ?? []) as ApprovalRow[]} onDecision={decideApproval} />
         )}
@@ -255,6 +265,9 @@ function App() {
         )}
         {timelineTitle && (
           <TimelinePanel title={timelineTitle} rows={timelineRows} onClose={() => setTimelineTitle("")} />
+        )}
+        {historyTitle && (
+          <HistoryPanel title={historyTitle} rows={historyRows} onClose={() => setHistoryTitle("")} />
         )}
       </section>
     </main>
@@ -334,7 +347,15 @@ function TimelinePanel({ title, rows, onClose }: { title: string; rows: Row[]; o
   );
 }
 
-function Reports({ rows, onShowEvidence }: { rows: ReportRow[]; onShowEvidence: (kind: "incidents" | "reports", id: number) => void }) {
+function Reports({
+  rows,
+  onShowEvidence,
+  onShowApprovalHistory,
+}: {
+  rows: ReportRow[];
+  onShowEvidence: (kind: "incidents" | "reports", id: number) => void;
+  onShowApprovalHistory: (id: number) => void;
+}) {
   return (
     <section className="list">
       <h3>AI Reports</h3>
@@ -344,10 +365,25 @@ function Reports({ rows, onShowEvidence }: { rows: ReportRow[]; onShowEvidence: 
             <strong>Report {row.id} v{row.report_version} for incident {row.incident_id}</strong>
             <p>{row.validation_status} | approval {row.human_approval_required ? "required" : "not required"} | created {row.created_at}</p>
           </div>
-          <button onClick={() => onShowEvidence("reports", row.id)}>Evidence</button>
+          <div className="decisionActions">
+            <button onClick={() => onShowEvidence("reports", row.id)}>Evidence</button>
+            <button onClick={() => onShowApprovalHistory(row.id)}>Approvals</button>
+          </div>
         </article>
       ))}
       {rows.length === 0 && <Empty text="No AI reports yet." />}
+    </section>
+  );
+}
+
+function HistoryPanel({ title, rows, onClose }: { title: string; rows: Row[]; onClose: () => void }) {
+  return (
+    <section className="evidencePanel">
+      <div className="panelHeader">
+        <h3>{title}</h3>
+        <button onClick={onClose}>Close</button>
+      </div>
+      <TableBody rows={rows} />
     </section>
   );
 }

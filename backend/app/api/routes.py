@@ -184,6 +184,15 @@ def list_report_evidence(report_id: int, session: Session = Depends(get_session)
     return [_row_dict(row) for row in rows]
 
 
+@router.get("/reports/{report_id}/approvals", dependencies=operator_read)
+def list_report_approvals(report_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    report = session.get(OperationalReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    rows = session.scalars(select(Approval).where(Approval.report_id == report_id).order_by(desc(Approval.created_at))).all()
+    return [_row_dict(row) for row in rows]
+
+
 @router.get("/approvals", dependencies=operator_read)
 def list_approvals(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(Approval).order_by(desc(Approval.created_at))).all()

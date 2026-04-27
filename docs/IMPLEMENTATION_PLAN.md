@@ -32,9 +32,9 @@ Status: in progress.
 Status: planned.
 
 - Add reviewer identity support instead of the current demo `operator` reviewer.
-- Add approval history views per report and incident.
+- Approval history views per report are implemented.
 - Audited incident resolve/reopen controls are implemented.
-- Add explicit risk policy rules for remediation classes.
+- Explicit remediation risk policy rules are implemented.
 - Report versioning is implemented for regenerated incident reports.
 - Audit CSV export is implemented for V-Model validation evidence.
 

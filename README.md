@@ -70,6 +70,8 @@ PostgreSQL audits.
 - report versioning for regenerated incident reports
 - high-risk recommendation approval queue
 - dashboard approval and rejection actions
+- approval history per report
+- centralized remediation risk policy for approval decisions
 - append-only audit trail for ingestion, incident creation, report saving, and approval decisions
 - CSV audit export for validation evidence
 - request correlation IDs returned through `X-Request-ID`
