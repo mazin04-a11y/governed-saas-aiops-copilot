@@ -105,6 +105,8 @@ Then open:
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
 
+Railway deployment notes are in [`docs/RAILWAY_DEPLOYMENT.md`](docs/RAILWAY_DEPLOYMENT.md).
+
 ## Database Migrations
 
 For local MVP bootstrapping, the API can create missing tables on startup. For production-style environments, use Alembic migrations:

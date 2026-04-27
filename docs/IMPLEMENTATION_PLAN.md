@@ -46,7 +46,7 @@ Status: in progress.
 - Move rate limiting to Redis or gateway infrastructure for multi-instance deployments.
 - Add structured logging and request correlation IDs.
 - CI runs backend tests, frontend build, and repository hygiene checks.
-- Add Railway deployment notes and service-folder configuration.
+- Railway deployment notes and service Dockerfiles are implemented.
 
 ## Phase 5: Product Expansion
 
