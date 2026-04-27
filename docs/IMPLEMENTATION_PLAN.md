@@ -39,13 +39,13 @@ Status: planned.
 
 ## Phase 4: Production Hardening
 
-Status: planned.
+Status: in progress.
 
 - Add Alembic migrations.
 - Add authentication for dashboard/API reads.
 - Move rate limiting to Redis or gateway infrastructure for multi-instance deployments.
 - Add structured logging and request correlation IDs.
-- Add CI for backend tests and frontend build.
+- CI runs backend tests, frontend build, and repository hygiene checks.
 - Add Railway deployment notes and service-folder configuration.
 
 ## Phase 5: Product Expansion

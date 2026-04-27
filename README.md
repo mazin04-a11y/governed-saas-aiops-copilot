@@ -152,6 +152,8 @@ cd backend
 pytest
 ```
 
+GitHub Actions also runs backend tests, the frontend production build, and a repository hygiene check that blocks private handover files, `.env`, local databases, dependency folders, and build output from being tracked.
+
 ## Governance Notes
 
 - LLMs do not create incidents. Deterministic detection creates incidents from internal data.
