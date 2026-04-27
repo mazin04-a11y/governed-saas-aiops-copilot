@@ -68,6 +68,7 @@ PostgreSQL audits.
 - high-risk recommendation approval queue
 - dashboard approval and rejection actions
 - append-only audit trail for ingestion, incident creation, report saving, and approval decisions
+- CSV audit export for validation evidence
 - request correlation IDs returned through `X-Request-ID`
 - React/Vite pages:
   - Overview

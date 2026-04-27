@@ -35,7 +35,7 @@ Status: planned.
 - Add approval history views per report and incident.
 - Add explicit risk policy rules for remediation classes.
 - Add report regeneration controls with version history.
-- Add audit export endpoint for V-Model validation evidence.
+- Audit CSV export is implemented for V-Model validation evidence.
 
 ## Phase 4: Production Hardening
 

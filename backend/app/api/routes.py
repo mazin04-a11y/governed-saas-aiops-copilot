@@ -1,6 +1,9 @@
 from datetime import datetime
+import csv
+import io
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -142,6 +145,24 @@ def decide_approval(approval_id: int, payload: ApprovalDecisionIn, session: Sess
 def list_audit_logs(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(200)).all()
     return [_row_dict(row) for row in rows]
+
+
+@router.get("/audit-logs/export", dependencies=operator_read)
+def export_audit_logs(session: Session = Depends(get_session)) -> StreamingResponse:
+    rows = session.scalars(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(1000)).all()
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=["id", "event_type", "actor", "entity_type", "entity_id", "details", "created_at"])
+    writer.writeheader()
+    for row in rows:
+        data = _row_dict(row)
+        data["details"] = str(data["details"])
+        writer.writerow(data)
+    buffer.seek(0)
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="audit-logs.csv"'},
+    )
 
 
 def _row_dict(row) -> dict:

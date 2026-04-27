@@ -29,6 +29,19 @@ def test_operator_api_key_can_protect_read_endpoints(client, monkeypatch):
         get_settings.cache_clear()
 
 
+def test_audit_logs_export_csv(client, auth_headers):
+    client.post(
+        "/metrics/ingest",
+        json={"service_name": "audit-api", "cpu_usage": 91, "memory_usage": 82, "response_time_ms": 1050, "error_rate": 5.5},
+        headers=auth_headers,
+    )
+    response = client.get("/audit-logs/export")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "event_type" in response.text
+    assert "metric_ingested" in response.text
+
+
 def test_api_key_required_for_ingestion(client):
     response = client.post(
         "/metrics/ingest",

@@ -141,6 +141,23 @@ function App() {
     return apiKey ? { "X-API-Key": apiKey } : undefined;
   }
 
+  async function exportAuditCsv() {
+    const response = await fetch(`${API_BASE}/audit-logs/export`, { headers: apiHeaders() });
+    if (!response.ok) {
+      setMessage(`Audit export failed: ${response.status}`);
+      return;
+    }
+    const text = await response.text();
+    const blob = new Blob([text], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "audit-logs.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    setMessage("Audit CSV exported.");
+  }
+
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -203,12 +220,24 @@ function App() {
         {active === "approvals" && (
           <Approvals rows={(data.approvals ?? []) as ApprovalRow[]} onDecision={decideApproval} />
         )}
-        {active === "audit" && <Table title="Audit Trail" rows={data["audit-logs"] ?? []} />}
+        {active === "audit" && <Audit rows={data["audit-logs"] ?? []} onExport={exportAuditCsv} />}
         {evidenceTitle && (
           <EvidencePanel title={evidenceTitle} rows={evidenceRows} onClose={() => setEvidenceTitle("")} />
         )}
       </section>
     </main>
+  );
+}
+
+function Audit({ rows, onExport }: { rows: Row[]; onExport: () => void }) {
+  return (
+    <section className="tableWrap">
+      <div className="panelHeader">
+        <h3>Audit Trail</h3>
+        <button onClick={onExport}>Export CSV</button>
+      </div>
+      <TableBody rows={rows} />
+    </section>
   );
 }
 
@@ -320,10 +349,18 @@ function Empty({ text }: { text: string }) {
 }
 
 function Table({ title, rows }: { title: string; rows: Row[] }) {
-  const keys = rows[0] ? Object.keys(rows[0]).slice(0, 7) : [];
   return (
     <section className="tableWrap">
       <h3>{title}</h3>
+      <TableBody rows={rows} />
+    </section>
+  );
+}
+
+function TableBody({ rows }: { rows: Row[] }) {
+  const keys = rows[0] ? Object.keys(rows[0]).slice(0, 7) : [];
+  return (
+    <>
       {rows.length === 0 ? (
         <Empty text="No rows yet." />
       ) : (
@@ -340,7 +377,7 @@ function Table({ title, rows }: { title: string; rows: Row[] }) {
           </tbody>
         </table>
       )}
-    </section>
+    </>
   );
 }
 
