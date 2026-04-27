@@ -70,7 +70,12 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
             parsed = parsed_from_openai
             raw_output = parsed.model_dump()
         else:
-            raw_output = generate_structured_output(state["incident_id"], state["evidence"], state["crew_analysis"])
+            raw_output = generate_structured_output(
+                state["incident_id"],
+                state["evidence"],
+                state["crew_analysis"],
+                state.get("external_context"),
+            )
             parsed = OperationalReportPayload.model_validate(raw_output)
         return {**state, "raw_output": raw_output, "parsed_report": parsed, "validation_status": "valid"}
 
@@ -100,7 +105,7 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
             prompt_version=settings.prompt_version,
             schema_version=settings.schema_version,
             raw_llm_output=state["raw_output"],
-            parsed_json=parsed.model_dump(),
+            parsed_json={**parsed.model_dump(), "external_context": state.get("external_context", {"status": "skipped", "items": []})},
             validation_status=state["validation_status"],
             human_approval_required=approval_required,
             human_approved=False if approval_required else True,
@@ -209,7 +214,12 @@ def run_crew_analysis(incident: Incident | None, evidence: list[dict[str, Any]],
     }
 
 
-def generate_structured_output(incident_id: int, evidence: list[dict[str, Any]], crew_analysis: dict[str, Any]) -> dict[str, Any]:
+def generate_structured_output(
+    incident_id: int,
+    evidence: list[dict[str, Any]],
+    crew_analysis: dict[str, Any],
+    external_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if not evidence:
         raise ValueError("cannot generate report without evidence")
     evidence_ids = [item["id"] for item in evidence]
@@ -230,4 +240,5 @@ def generate_structured_output(incident_id: int, evidence: list[dict[str, Any]],
         "recommendations": [recommendation.model_dump()],
         "confidence": 0.74,
         "crew_analysis": crew_analysis,
+        "external_context": external_context or {"status": "skipped", "items": []},
     }

@@ -211,6 +211,14 @@ def test_external_intel_context_does_not_create_incidents(client):
     assert response.json() == []
 
 
+def test_external_intel_context_is_preserved_as_report_provenance(client, auth_headers):
+    payload = {"service_name": "intel-api", "cpu_usage": 95, "memory_usage": 91, "response_time_ms": 1300, "error_rate": 7}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+    client.post(f"/incidents/{incident_id}/reports", json={"use_external_intel": True})
+    report = client.get("/reports").json()[0]
+    assert report["parsed_json"]["external_context"]["status"] in {"not_configured", "ok", "failed"}
+
+
 def test_openai_structured_report_path_saves_validated_payload(client, auth_headers, monkeypatch):
     payload = {"service_name": "reports-api", "cpu_usage": 93, "memory_usage": 86, "response_time_ms": 1180, "error_rate": 6}
     incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]

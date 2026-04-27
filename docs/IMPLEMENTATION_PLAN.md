@@ -56,5 +56,5 @@ Status: planned.
 - Add tenant/project boundaries.
 - Add streaming or scheduled data collection integrations.
 - Incident timelines across evidence, reports, and approvals are implemented.
-- Add external-intel source provenance in reports.
+- External-intel provenance is preserved in report JSON.
 - Add policy packs for different SaaS operating models.
