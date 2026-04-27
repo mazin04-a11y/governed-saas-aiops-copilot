@@ -42,7 +42,26 @@ type ReportRow = Row & {
   validation_status: string;
   human_approval_required: boolean;
   human_approved?: boolean | null;
+  evidence_ids?: number[];
   created_at: string;
+};
+
+type ParsedReport = {
+  executive_summary?: string;
+  evidence_ids?: number[];
+  root_cause_hypotheses?: string[];
+  risk_assessment?: string;
+  recommendations?: { title?: string; rationale?: string; risk_level?: string; requires_human_approval?: boolean }[];
+  confidence?: number;
+  crew_analysis?: Row;
+  external_context?: Row;
+};
+
+type ReportDetail = ReportRow & {
+  model_name?: string;
+  prompt_version?: string;
+  schema_version?: string;
+  parsed_json?: ParsedReport;
 };
 
 const tabs = [
@@ -71,6 +90,7 @@ function App() {
   const [timelineRows, setTimelineRows] = useState<Row[]>([]);
   const [historyTitle, setHistoryTitle] = useState("");
   const [historyRows, setHistoryRows] = useState<Row[]>([]);
+  const [reportDetail, setReportDetail] = useState<ReportDetail | null>(null);
 
   async function refresh() {
     const endpoints = ["metrics", "access-logs", "reports", "approvals", "audit-logs"];
@@ -160,6 +180,11 @@ function App() {
     setHistoryRows(rows);
   }
 
+  async function showReportDetail(reportId: number) {
+    const report = await fetchJson(`${API_BASE}/reports/${reportId}`);
+    if (report) setReportDetail(report as ReportDetail);
+  }
+
   async function setIncidentStatus(incidentId: number, status: "open" | "resolved") {
     const response = await fetch(`${API_BASE}/incidents/${incidentId}/status`, {
       method: "PATCH",
@@ -182,15 +207,20 @@ function App() {
   }
 
   async function fetchRows(url: string) {
+    const data = await fetchJson(url);
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function fetchJson(url: string) {
     try {
       const response = await fetch(url, { headers: apiHeaders() });
       if (response.status === 401) {
         setAuthRequired(true);
-        return [];
+        return null;
       }
-      return response.ok ? response.json() : [];
+      return response.ok ? response.json() : null;
     } catch {
-      return [];
+      return null;
     }
   }
 
@@ -322,7 +352,12 @@ function App() {
           />
         )}
         {active === "reports" && (
-          <Reports rows={(data.reports ?? []) as ReportRow[]} onShowEvidence={showEvidence} onShowApprovalHistory={showApprovalHistory} />
+          <Reports
+            rows={(data.reports ?? []) as ReportRow[]}
+            onShowEvidence={showEvidence}
+            onShowApprovalHistory={showApprovalHistory}
+            onShowReportDetail={showReportDetail}
+          />
         )}
         {active === "approvals" && (
           <Approvals rows={(data.approvals ?? []) as ApprovalRow[]} onDecision={decideApproval} />
@@ -336,6 +371,9 @@ function App() {
         )}
         {historyTitle && (
           <HistoryPanel title={historyTitle} rows={historyRows} onClose={() => setHistoryTitle("")} />
+        )}
+        {reportDetail && (
+          <ReportDetailPanel report={reportDetail} onClose={() => setReportDetail(null)} />
         )}
       </section>
     </main>
@@ -419,10 +457,12 @@ function Reports({
   rows,
   onShowEvidence,
   onShowApprovalHistory,
+  onShowReportDetail,
 }: {
   rows: ReportRow[];
   onShowEvidence: (kind: "incidents" | "reports", id: number) => void;
   onShowApprovalHistory: (id: number) => void;
+  onShowReportDetail: (id: number) => void;
 }) {
   return (
     <section className="list">
@@ -434,6 +474,7 @@ function Reports({
             <p>{row.validation_status} | approval {row.human_approval_required ? "required" : "not required"} | created {row.created_at}</p>
           </div>
           <div className="decisionActions">
+            <button onClick={() => onShowReportDetail(row.id)}>Details</button>
             <button onClick={() => onShowEvidence("reports", row.id)}>Evidence</button>
             <button onClick={() => onShowApprovalHistory(row.id)}>Approvals</button>
           </div>
@@ -442,6 +483,79 @@ function Reports({
       {rows.length === 0 && <Empty text="No AI reports yet." />}
     </section>
   );
+}
+
+function ReportDetailPanel({ report, onClose }: { report: ReportDetail; onClose: () => void }) {
+  const parsed = report.parsed_json ?? {};
+  const recommendations = parsed.recommendations ?? [];
+  return (
+    <section className="detailPanel">
+      <div className="panelHeader">
+        <div>
+          <h3>Report {report.id} v{report.report_version}</h3>
+          <p>Incident {report.incident_id} | {report.validation_status} | confidence {formatConfidence(parsed.confidence)}</p>
+        </div>
+        <button onClick={onClose}>Close</button>
+      </div>
+      <div className="detailGrid">
+        <article>
+          <span>Executive summary</span>
+          <p>{parsed.executive_summary ?? "No summary stored."}</p>
+        </article>
+        <article>
+          <span>Risk assessment</span>
+          <p>{parsed.risk_assessment ?? "No risk assessment stored."}</p>
+        </article>
+        <article>
+          <span>Evidence IDs</span>
+          <p>{(parsed.evidence_ids ?? report.evidence_ids ?? []).join(", ") || "None"}</p>
+        </article>
+        <article>
+          <span>Generation metadata</span>
+          <p>{report.model_name ?? "unknown"} | {report.prompt_version ?? "unknown"} | {report.schema_version ?? "unknown"}</p>
+        </article>
+      </div>
+      <DetailList title="Root cause hypotheses" items={parsed.root_cause_hypotheses ?? []} />
+      <div className="recommendations">
+        <h4>Recommendations</h4>
+        {recommendations.map((item, index) => (
+          <article key={`${item.title}-${index}`}>
+            <strong>{item.title ?? "Recommendation"}</strong>
+            <p>{item.rationale ?? ""}</p>
+            <span>{item.risk_level ?? "unknown"} risk | {item.requires_human_approval ? "approval required" : "approval not required"}</span>
+          </article>
+        ))}
+        {recommendations.length === 0 && <Empty text="No recommendations stored." />}
+      </div>
+      <div className="provenanceGrid">
+        <JsonBlock title="External provenance" value={parsed.external_context ?? report.parsed_json?.external_context ?? {}} />
+        <JsonBlock title="Crew analysis" value={parsed.crew_analysis ?? {}} />
+      </div>
+    </section>
+  );
+}
+
+function DetailList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="detailList">
+      <h4>{title}</h4>
+      {items.map((item, index) => <p key={`${title}-${index}`}>{item}</p>)}
+      {items.length === 0 && <Empty text="No entries stored." />}
+    </div>
+  );
+}
+
+function JsonBlock({ title, value }: { title: string; value: unknown }) {
+  return (
+    <article className="jsonBlock">
+      <h4>{title}</h4>
+      <pre>{JSON.stringify(value, null, 2)}</pre>
+    </article>
+  );
+}
+
+function formatConfidence(value: number | undefined) {
+  return typeof value === "number" ? `${Math.round(value * 100)}%` : "unknown";
 }
 
 function HistoryPanel({ title, rows, onClose }: { title: string; rows: Row[]; onClose: () => void }) {

@@ -50,6 +50,7 @@ input {
 h1,
 h2,
 h3,
+h4,
 p {
   margin: 0;
 }
@@ -258,7 +259,8 @@ nav button:hover {
   gap: 14px;
 }
 
-.evidencePanel {
+.evidencePanel,
+.detailPanel {
   margin-top: 18px;
   display: grid;
   gap: 12px;
@@ -319,6 +321,62 @@ nav button:hover {
 
 .timelineEvent span {
   color: #6a746d;
+  font-size: 12px;
+}
+
+.detailGrid,
+.provenanceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detailGrid article,
+.detailList,
+.recommendations,
+.jsonBlock {
+  border-top: 1px solid #e8ece5;
+  padding-top: 12px;
+}
+
+.detailGrid span,
+.recommendations span {
+  color: #5c665f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.detailGrid p,
+.detailList p,
+.recommendations p {
+  margin-top: 6px;
+  color: #2c342e;
+  line-height: 1.5;
+}
+
+.recommendations {
+  display: grid;
+  gap: 10px;
+}
+
+.recommendations article {
+  display: grid;
+  gap: 4px;
+  background: #f7faf5;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.jsonBlock pre {
+  margin: 8px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #1f2522;
+  color: #edf4ee;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-size: 12px;
 }
 
@@ -386,6 +444,11 @@ th {
   }
 
   .loginPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .detailGrid,
+  .provenanceGrid {
     grid-template-columns: 1fr;
   }
 }
