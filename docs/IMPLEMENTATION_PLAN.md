@@ -19,10 +19,10 @@ Status: implemented.
 
 ## Phase 2: Live LLM and Crew Execution
 
-Status: next.
+Status: in progress.
 
-- Replace deterministic report text fallback with OpenAI structured output when `OPENAI_API_KEY` is configured.
-- Keep deterministic fallback for local development and CI.
+- OpenAI structured output is used when `OPENAI_API_KEY` is configured.
+- Deterministic fallback remains for local development and CI.
 - Run CrewAI tasks for specialist analysis while preserving the LangGraph workflow as the control layer.
 - Save model name, prompt version, schema version, raw output, parsed JSON, validation status, and evidence IDs for every report.
 - Add tests for malformed model output and fallback behavior.
@@ -57,4 +57,3 @@ Status: planned.
 - Add richer metrics visualizations and incident timelines.
 - Add external-intel source provenance in reports.
 - Add policy packs for different SaaS operating models.
-

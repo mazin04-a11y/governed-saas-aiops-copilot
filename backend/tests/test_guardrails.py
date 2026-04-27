@@ -1,9 +1,8 @@
 from app.core import database
 from app.models.records import Incident
+from app.schemas.records import OperationalReportPayload
 from app.services.reporting import generate_structured_output, run_report_workflow
 from pydantic import ValidationError
-
-from app.schemas.records import OperationalReportPayload
 
 
 def test_no_data_creates_no_incidents(client):
@@ -92,3 +91,37 @@ def test_external_intel_context_does_not_create_incidents(client):
     response = client.get("/incidents")
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_openai_structured_report_path_saves_validated_payload(client, auth_headers, monkeypatch):
+    payload = {"service_name": "reports-api", "cpu_usage": 93, "memory_usage": 86, "response_time_ms": 1180, "error_rate": 6}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+
+    def fake_openai_report(incident, evidence, crew_analysis):
+        return OperationalReportPayload.model_validate(
+            {
+                "incident_id": incident.id,
+                "executive_summary": "OpenAI structured output produced an evidence-grounded report.",
+                "evidence_ids": [item["id"] for item in evidence],
+                "root_cause_hypotheses": ["Stored metric evidence indicates service degradation."],
+                "risk_assessment": "Recommendation affects production behavior and must be reviewed.",
+                "recommendations": [
+                    {
+                        "title": "Review production mitigation",
+                        "rationale": "The proposed mitigation changes production operations.",
+                        "risk_level": "high",
+                        "requires_human_approval": True,
+                    }
+                ],
+                "confidence": 0.82,
+            }
+        )
+
+    monkeypatch.setattr("app.services.reporting.generate_openai_structured_report", fake_openai_report)
+    response = client.post(f"/incidents/{incident_id}/reports", json={})
+    assert response.status_code == 200
+    assert response.json()["human_approval_required"] is True
+
+    report = client.get("/reports").json()[0]
+    assert report["validation_status"] == "valid"
+    assert report["parsed_json"]["confidence"] == 0.82

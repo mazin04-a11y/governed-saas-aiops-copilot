@@ -11,6 +11,7 @@ from app.models.records import Approval, EvidenceLog, Incident, OperationalRepor
 from app.schemas.records import OperationalReportPayload, OperationalRecommendation
 from app.services.audit import audit
 from app.services.external_intel import fetch_external_intel_context
+from app.services.openai_reports import generate_openai_structured_report
 
 
 class WorkflowState(TypedDict, total=False):
@@ -62,8 +63,14 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
         }
 
     def validate_node(state: WorkflowState) -> WorkflowState:
-        raw_output = generate_structured_output(state["incident_id"], state["evidence"], state["crew_analysis"])
-        parsed = OperationalReportPayload.model_validate(raw_output)
+        incident = session.get(Incident, state["incident_id"])
+        parsed_from_openai = generate_openai_structured_report(incident, state["evidence"], state["crew_analysis"])
+        if parsed_from_openai:
+            parsed = parsed_from_openai
+            raw_output = parsed.model_dump()
+        else:
+            raw_output = generate_structured_output(state["incident_id"], state["evidence"], state["crew_analysis"])
+            parsed = OperationalReportPayload.model_validate(raw_output)
         return {**state, "raw_output": raw_output, "parsed_report": parsed, "validation_status": "valid"}
 
     def safety_node(state: WorkflowState) -> WorkflowState:

@@ -49,6 +49,7 @@ PostgreSQL audits.
 - incident deduplication by correlation key
 - evidence logs linked to incidents
 - optional Serper external-intel context inside report generation
+- OpenAI Responses API structured-output path when `OPENAI_API_KEY` is configured
 - LangGraph workflow nodes:
   - `BuildEvidenceBundle`
   - `RunCrewAIAnalysis`
@@ -124,7 +125,7 @@ curl -X POST http://localhost:8000/access-logs/ingest \
   -d '{"username":"security_user","action":"login","ip_address":"203.0.113.77","outcome":"failed"}'
 ```
 
-Generate a governed report for an incident:
+Generate a governed report for an incident. If `OPENAI_API_KEY` is configured, the backend uses OpenAI structured output and then validates the parsed report with Pydantic. Without an OpenAI key, it uses a deterministic local fallback so the product remains runnable in development and CI:
 
 ```bash
 curl -X POST http://localhost:8000/incidents/1/reports \
