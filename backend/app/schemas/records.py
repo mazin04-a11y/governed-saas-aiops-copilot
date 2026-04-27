@@ -75,3 +75,15 @@ class IncidentStatusUpdate(BaseModel):
     status: Literal["open", "resolved"]
     actor: str = Field(default="operator", min_length=1, max_length=120)
     reason: str = Field(min_length=1, max_length=500)
+
+
+class OperatorLoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=500)
+
+
+class OperatorSessionOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    username: str

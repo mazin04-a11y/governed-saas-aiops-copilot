@@ -1,5 +1,6 @@
 from datetime import datetime
 import csv
+import hmac
 import io
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,21 +9,47 @@ from pydantic import ValidationError
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import rate_limit, require_ingest_api_key, require_operator_api_key
+from app.api.dependencies import create_operator_token, rate_limit, require_ingest_api_key, require_operator_session
 from app.core.database import get_session
 from app.models.records import AccessLog, Approval, AuditLog, EvidenceLog, Incident, OperationalReport, SystemMetric
-from app.schemas.records import AccessLogIn, ApprovalDecisionIn, IncidentOut, IncidentStatusUpdate, MetricIn, ReportRequest
+from app.core.config import get_settings
+from app.schemas.records import (
+    AccessLogIn,
+    ApprovalDecisionIn,
+    IncidentOut,
+    IncidentStatusUpdate,
+    MetricIn,
+    OperatorLoginIn,
+    OperatorSessionOut,
+    ReportRequest,
+)
 from app.services.audit import audit
 from app.services.detection import ingest_access_log, ingest_metric
 from app.services.reporting import run_report_workflow
 
 router = APIRouter()
-operator_read = [Depends(require_operator_api_key)]
+operator_auth = [Depends(require_operator_session)]
 
 
 @router.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "governed-saas-aiops-copilot"}
+
+
+@router.post("/auth/login", response_model=OperatorSessionOut, dependencies=[Depends(rate_limit)])
+def operator_login(payload: OperatorLoginIn) -> OperatorSessionOut:
+    settings = get_settings()
+    if not settings.operator_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="operator password authentication is not configured")
+    valid_username = hmac.compare_digest(payload.username, settings.operator_username)
+    valid_password = hmac.compare_digest(payload.password, settings.operator_password)
+    if not valid_username or not valid_password:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid operator credentials")
+    return OperatorSessionOut(
+        access_token=create_operator_token(payload.username),
+        expires_in=settings.operator_session_ttl_seconds,
+        username=payload.username,
+    )
 
 
 @router.post("/metrics/ingest", dependencies=[Depends(rate_limit), Depends(require_ingest_api_key)])
@@ -37,24 +64,24 @@ def access_logs_ingest(payload: AccessLogIn, session: Session = Depends(get_sess
     return {"access_log_id": access_log.id, "incident_id": incident.id if incident else None}
 
 
-@router.get("/metrics", dependencies=operator_read)
+@router.get("/metrics", dependencies=operator_auth)
 def list_metrics(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(SystemMetric).order_by(desc(SystemMetric.created_at)).limit(100)).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/access-logs", dependencies=operator_read)
+@router.get("/access-logs", dependencies=operator_auth)
 def list_access_logs(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(AccessLog).order_by(desc(AccessLog.created_at)).limit(100)).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/incidents", response_model=list[IncidentOut], dependencies=operator_read)
+@router.get("/incidents", response_model=list[IncidentOut], dependencies=operator_auth)
 def list_incidents(session: Session = Depends(get_session)):
     return session.scalars(select(Incident).order_by(desc(Incident.updated_at))).all()
 
 
-@router.get("/incidents/{incident_id}", dependencies=operator_read)
+@router.get("/incidents/{incident_id}", dependencies=operator_auth)
 def get_incident(incident_id: int, session: Session = Depends(get_session)) -> dict:
     incident = session.get(Incident, incident_id)
     if not incident:
@@ -62,7 +89,7 @@ def get_incident(incident_id: int, session: Session = Depends(get_session)) -> d
     return _row_dict(incident)
 
 
-@router.get("/incidents/{incident_id}/evidence", dependencies=operator_read)
+@router.get("/incidents/{incident_id}/evidence", dependencies=operator_auth)
 def list_incident_evidence(incident_id: int, session: Session = Depends(get_session)) -> list[dict]:
     incident = session.get(Incident, incident_id)
     if not incident:
@@ -73,7 +100,7 @@ def list_incident_evidence(incident_id: int, session: Session = Depends(get_sess
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/incidents/{incident_id}/timeline", dependencies=operator_read)
+@router.get("/incidents/{incident_id}/timeline", dependencies=operator_auth)
 def get_incident_timeline(incident_id: int, session: Session = Depends(get_session)) -> list[dict]:
     incident = session.get(Incident, incident_id)
     if not incident:
@@ -129,7 +156,7 @@ def get_incident_timeline(incident_id: int, session: Session = Depends(get_sessi
     return sorted(events, key=lambda item: item["timestamp"], reverse=True)
 
 
-@router.patch("/incidents/{incident_id}/status", dependencies=operator_read)
+@router.patch("/incidents/{incident_id}/status", dependencies=operator_auth)
 def update_incident_status(incident_id: int, payload: IncidentStatusUpdate, session: Session = Depends(get_session)) -> dict:
     incident = session.get(Incident, incident_id)
     if not incident:
@@ -148,7 +175,7 @@ def update_incident_status(incident_id: int, payload: IncidentStatusUpdate, sess
     return {"incident_id": incident.id, "status": incident.status}
 
 
-@router.post("/incidents/{incident_id}/reports")
+@router.post("/incidents/{incident_id}/reports", dependencies=operator_auth)
 def create_report(incident_id: int, payload: ReportRequest | None = None, session: Session = Depends(get_session)) -> dict:
     try:
         report = run_report_workflow(session, incident_id, use_external_intel=payload.use_external_intel if payload else False)
@@ -159,13 +186,13 @@ def create_report(incident_id: int, payload: ReportRequest | None = None, sessio
     return {"report_id": report.id, "human_approval_required": report.human_approval_required}
 
 
-@router.get("/reports", dependencies=operator_read)
+@router.get("/reports", dependencies=operator_auth)
 def list_reports(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(OperationalReport).order_by(desc(OperationalReport.created_at))).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/reports/{report_id}", dependencies=operator_read)
+@router.get("/reports/{report_id}", dependencies=operator_auth)
 def get_report(report_id: int, session: Session = Depends(get_session)) -> dict:
     report = session.get(OperationalReport, report_id)
     if not report:
@@ -173,7 +200,7 @@ def get_report(report_id: int, session: Session = Depends(get_session)) -> dict:
     return _row_dict(report)
 
 
-@router.get("/reports/{report_id}/evidence", dependencies=operator_read)
+@router.get("/reports/{report_id}/evidence", dependencies=operator_auth)
 def list_report_evidence(report_id: int, session: Session = Depends(get_session)) -> list[dict]:
     report = session.get(OperationalReport, report_id)
     if not report:
@@ -184,7 +211,7 @@ def list_report_evidence(report_id: int, session: Session = Depends(get_session)
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/reports/{report_id}/approvals", dependencies=operator_read)
+@router.get("/reports/{report_id}/approvals", dependencies=operator_auth)
 def list_report_approvals(report_id: int, session: Session = Depends(get_session)) -> list[dict]:
     report = session.get(OperationalReport, report_id)
     if not report:
@@ -193,13 +220,13 @@ def list_report_approvals(report_id: int, session: Session = Depends(get_session
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/approvals", dependencies=operator_read)
+@router.get("/approvals", dependencies=operator_auth)
 def list_approvals(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(Approval).order_by(desc(Approval.created_at))).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.post("/approvals/{approval_id}/decision")
+@router.post("/approvals/{approval_id}/decision", dependencies=operator_auth)
 def decide_approval(approval_id: int, payload: ApprovalDecisionIn, session: Session = Depends(get_session)) -> dict:
     approval = session.get(Approval, approval_id)
     if not approval:
@@ -225,13 +252,13 @@ def decide_approval(approval_id: int, payload: ApprovalDecisionIn, session: Sess
     return {"approval_id": approval.id, "status": approval.status}
 
 
-@router.get("/audit-logs", dependencies=operator_read)
+@router.get("/audit-logs", dependencies=operator_auth)
 def list_audit_logs(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(200)).all()
     return [_row_dict(row) for row in rows]
 
 
-@router.get("/audit-logs/export", dependencies=operator_read)
+@router.get("/audit-logs/export", dependencies=operator_auth)
 def export_audit_logs(session: Session = Depends(get_session)) -> StreamingResponse:
     rows = session.scalars(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(1000)).all()
     buffer = io.StringIO()

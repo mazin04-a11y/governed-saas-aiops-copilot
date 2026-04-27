@@ -46,6 +46,7 @@ PostgreSQL audits.
 - `POST /metrics/ingest`, protected by `X-API-Key`
 - `POST /access-logs/ingest`, protected by `X-API-Key`
 - optional operator read API protection with `OPERATOR_API_KEYS`
+- optional operator username/password login with signed bearer sessions
 - deterministic performance and failed-login incident detection
 - incident deduplication by correlation key
 - evidence logs linked to incidents
@@ -96,6 +97,10 @@ Copy `.env.example` to `.env` and fill values locally:
 DATABASE_URL=postgresql+psycopg://aiops:aiops@postgres:5432/governed_aiops
 INGEST_API_KEYS=local-dev-ingest-key
 OPERATOR_API_KEYS=
+OPERATOR_USERNAME=operator
+OPERATOR_PASSWORD=
+OPERATOR_SESSION_SECRET=change-me-before-deploy
+OPERATOR_SESSION_TTL_SECONDS=3600
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
 CREWAI_EXECUTION_ENABLED=true
@@ -156,6 +161,14 @@ Generate a governed report for an incident. If `OPENAI_API_KEY` is configured, t
 curl -X POST http://localhost:8000/incidents/1/reports \
   -H "Content-Type: application/json" \
   -d '{}'
+```
+
+If `OPERATOR_PASSWORD` is configured, sign in to the dashboard or request a bearer token directly:
+
+```bash
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"operator","password":"your-password"}'
 ```
 
 ## Validation Evidence

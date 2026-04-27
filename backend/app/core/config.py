@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./governed_aiops.db"
     ingest_api_keys: str = "local-dev-ingest-key"
     operator_api_keys: str = ""
+    operator_username: str = "operator"
+    operator_password: str | None = None
+    operator_session_secret: str = "local-dev-session-secret-change-me"
+    operator_session_ttl_seconds: int = Field(default=3600, ge=60)
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
     crewai_execution_enabled: bool = True

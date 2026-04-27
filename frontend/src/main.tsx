@@ -60,6 +60,10 @@ function App() {
   const [data, setData] = useState<Record<string, Row[]>>({});
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [apiKey, setApiKey] = useState("local-dev-ingest-key");
+  const [operatorToken, setOperatorToken] = useState(() => localStorage.getItem("operatorToken") ?? "");
+  const [loginUsername, setLoginUsername] = useState("operator");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authRequired, setAuthRequired] = useState(false);
   const [message, setMessage] = useState("");
   const [evidenceTitle, setEvidenceTitle] = useState("");
   const [evidenceRows, setEvidenceRows] = useState<Row[]>([]);
@@ -71,10 +75,10 @@ function App() {
   async function refresh() {
     const endpoints = ["metrics", "access-logs", "reports", "approvals", "audit-logs"];
     const loaded = await Promise.all(
-      endpoints.map(async (name) => [name, await fetch(`${API_BASE}/${name}`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => [])] as const),
+      endpoints.map(async (name) => [name, await fetchRows(`${API_BASE}/${name}`)] as const),
     );
     setData(Object.fromEntries(loaded));
-    setIncidents(await fetch(`${API_BASE}/incidents`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []));
+    setIncidents(await fetchRows(`${API_BASE}/incidents`));
   }
 
   useEffect(() => {
@@ -115,9 +119,10 @@ function App() {
   async function createReport(incidentId: number) {
     const response = await fetch(`${API_BASE}/incidents/${incidentId}/reports`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...apiHeaders() },
       body: JSON.stringify({ use_external_intel: true }),
     });
+    if (response.status === 401) setAuthRequired(true);
     setMessage(response.ok ? "LangGraph workflow saved a validated report." : `Report workflow failed: ${response.status}`);
     refresh();
   }
@@ -125,31 +130,32 @@ function App() {
   async function decideApproval(approvalId: number, status: "approved" | "rejected") {
     const response = await fetch(`${API_BASE}/approvals/${approvalId}/decision`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...apiHeaders() },
       body: JSON.stringify({
         status,
         reviewer: "operator",
         decision_reason: status === "approved" ? "Approved from operator dashboard." : "Rejected from operator dashboard.",
       }),
     });
+    if (response.status === 401) setAuthRequired(true);
     setMessage(response.ok ? `Approval ${status}.` : `Approval decision failed: ${response.status}`);
     refresh();
   }
 
   async function showEvidence(kind: "incidents" | "reports", id: number) {
-    const rows = await fetch(`${API_BASE}/${kind}/${id}/evidence`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
+    const rows = await fetchRows(`${API_BASE}/${kind}/${id}/evidence`);
     setEvidenceTitle(`${kind === "incidents" ? "Incident" : "Report"} ${id} evidence`);
     setEvidenceRows(rows);
   }
 
   async function showTimeline(incidentId: number) {
-    const rows = await fetch(`${API_BASE}/incidents/${incidentId}/timeline`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
+    const rows = await fetchRows(`${API_BASE}/incidents/${incidentId}/timeline`);
     setTimelineTitle(`Incident ${incidentId} timeline`);
     setTimelineRows(rows);
   }
 
   async function showApprovalHistory(reportId: number) {
-    const rows = await fetch(`${API_BASE}/reports/${reportId}/approvals`, { headers: apiHeaders() }).then((r) => r.json()).catch(() => []);
+    const rows = await fetchRows(`${API_BASE}/reports/${reportId}/approvals`);
     setHistoryTitle(`Report ${reportId} approval history`);
     setHistoryRows(rows);
   }
@@ -169,7 +175,50 @@ function App() {
   }
 
   function apiHeaders() {
-    return apiKey ? { "X-API-Key": apiKey } : undefined;
+    const headers: Record<string, string> = {};
+    if (apiKey) headers["X-API-Key"] = apiKey;
+    if (operatorToken) headers.Authorization = `Bearer ${operatorToken}`;
+    return headers;
+  }
+
+  async function fetchRows(url: string) {
+    try {
+      const response = await fetch(url, { headers: apiHeaders() });
+      if (response.status === 401) {
+        setAuthRequired(true);
+        return [];
+      }
+      return response.ok ? response.json() : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function loginOperator(event: React.FormEvent) {
+    event.preventDefault();
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: loginUsername, password: loginPassword }),
+    });
+    if (!response.ok) {
+      setMessage(`Operator login failed: ${response.status}`);
+      return;
+    }
+    const session = await response.json();
+    localStorage.setItem("operatorToken", session.access_token);
+    setOperatorToken(session.access_token);
+    setLoginPassword("");
+    setAuthRequired(false);
+    setMessage(`Signed in as ${session.username}.`);
+    refresh();
+  }
+
+  function logoutOperator() {
+    localStorage.removeItem("operatorToken");
+    setOperatorToken("");
+    setAuthRequired(true);
+    setMessage("Operator session cleared.");
   }
 
   async function exportAuditCsv() {
@@ -222,9 +271,28 @@ function App() {
             <KeyRound size={16} />
             <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} aria-label="Ingest API key" />
           </label>
+          {operatorToken ? (
+            <button className="sessionButton" onClick={logoutOperator}>Sign out</button>
+          ) : (
+            <span className="sessionHint">Session optional until operator auth is configured</span>
+          )}
         </header>
 
         {message && <div className="notice">{message}</div>}
+        {authRequired && !operatorToken && (
+          <form className="loginPanel" onSubmit={loginOperator}>
+            <h3>Operator sign in</h3>
+            <input value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} aria-label="Operator username" />
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              aria-label="Operator password"
+              placeholder="Password"
+            />
+            <button type="submit">Sign in</button>
+          </form>
+        )}
 
         {active === "overview" && (
           <div className="overview">

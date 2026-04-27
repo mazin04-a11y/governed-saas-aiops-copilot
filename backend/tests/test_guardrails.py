@@ -33,6 +33,26 @@ def test_operator_api_key_can_protect_read_endpoints(client, monkeypatch):
         get_settings.cache_clear()
 
 
+def test_operator_login_session_can_protect_dashboard_endpoints(client, monkeypatch):
+    monkeypatch.setenv("OPERATOR_USERNAME", "ops")
+    monkeypatch.setenv("OPERATOR_PASSWORD", "secret-password")
+    monkeypatch.setenv("OPERATOR_SESSION_SECRET", "test-session-secret")
+    get_settings.cache_clear()
+    try:
+        assert client.get("/incidents").status_code == 401
+        login = client.post("/auth/login", json={"username": "ops", "password": "secret-password"})
+        assert login.status_code == 200
+        token = login.json()["access_token"]
+        response = client.get("/incidents", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert client.get("/incidents", headers={"Authorization": "Bearer bad.token"}).status_code == 401
+    finally:
+        monkeypatch.delenv("OPERATOR_USERNAME", raising=False)
+        monkeypatch.delenv("OPERATOR_PASSWORD", raising=False)
+        monkeypatch.delenv("OPERATOR_SESSION_SECRET", raising=False)
+        get_settings.cache_clear()
+
+
 def test_audit_logs_export_csv(client, auth_headers):
     client.post(
         "/metrics/ingest",

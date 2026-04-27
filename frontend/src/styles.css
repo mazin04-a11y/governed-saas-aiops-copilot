@@ -71,7 +71,9 @@ nav {
 
 nav button,
 .actions button,
-.item button {
+.item button,
+.sessionButton,
+.loginPanel button {
   border: 0;
   border-radius: 8px;
   cursor: pointer;
@@ -128,12 +130,45 @@ nav button:hover {
   outline: none;
 }
 
+.sessionButton,
+.loginPanel button {
+  min-height: 40px;
+  padding: 0 14px;
+  background: #21312a;
+  color: #ffffff;
+}
+
+.sessionHint {
+  color: #5c665f;
+  font-size: 13px;
+}
+
 .notice {
   margin-bottom: 16px;
   padding: 12px 14px;
   background: #fff7df;
   border: 1px solid #f0cf76;
   border-radius: 8px;
+}
+
+.loginPanel {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe5dc;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.loginPanel input {
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid #d6ddd0;
+  border-radius: 8px;
+  padding: 0 12px;
 }
 
 .overview {
@@ -348,5 +383,9 @@ th {
 
   .keyInput {
     min-width: 0;
+  }
+
+  .loginPanel {
+    grid-template-columns: 1fr;
   }
 }
