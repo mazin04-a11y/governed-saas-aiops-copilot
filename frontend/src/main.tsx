@@ -35,6 +35,15 @@ type ApprovalRow = Row & {
   decision_reason?: string | null;
 };
 
+type ReportRow = Row & {
+  id: number;
+  incident_id: number;
+  validation_status: string;
+  human_approval_required: boolean;
+  human_approved?: boolean | null;
+  created_at: string;
+};
+
 const tabs = [
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "metrics", label: "Metrics", icon: BarChart3 },
@@ -51,6 +60,8 @@ function App() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [apiKey, setApiKey] = useState("local-dev-ingest-key");
   const [message, setMessage] = useState("");
+  const [evidenceTitle, setEvidenceTitle] = useState("");
+  const [evidenceRows, setEvidenceRows] = useState<Row[]>([]);
 
   async function refresh() {
     const endpoints = ["metrics", "access-logs", "reports", "approvals", "audit-logs"];
@@ -120,6 +131,12 @@ function App() {
     refresh();
   }
 
+  async function showEvidence(kind: "incidents" | "reports", id: number) {
+    const rows = await fetch(`${API_BASE}/${kind}/${id}/evidence`).then((r) => r.json()).catch(() => []);
+    setEvidenceTitle(`${kind === "incidents" ? "Incident" : "Report"} ${id} evidence`);
+    setEvidenceRows(rows);
+  }
+
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -176,27 +193,87 @@ function App() {
         {active === "metrics" && <Table title="Metrics" rows={data.metrics ?? []} />}
         {active === "security" && <Table title="Access Logs" rows={data["access-logs"] ?? []} />}
         {active === "incidents" && (
-          <section className="list">
-            <h3>Incidents</h3>
-            {incidents.map((incident) => (
-              <article className="item" key={incident.id}>
-                <div>
-                  <strong>{incident.title}</strong>
-                  <p>{incident.incident_type} | {incident.severity} | evidence {incident.evidence_ids.join(", ")}</p>
-                </div>
-                <button onClick={() => createReport(incident.id)}>Generate report</button>
-              </article>
-            ))}
-            {incidents.length === 0 && <Empty text="No incidents. Connect data through the protected ingestion API." />}
-          </section>
+          <Incidents incidents={incidents} onCreateReport={createReport} onShowEvidence={showEvidence} />
         )}
-        {active === "reports" && <Table title="AI Reports" rows={data.reports ?? []} />}
+        {active === "reports" && <Reports rows={(data.reports ?? []) as ReportRow[]} onShowEvidence={showEvidence} />}
         {active === "approvals" && (
           <Approvals rows={(data.approvals ?? []) as ApprovalRow[]} onDecision={decideApproval} />
         )}
         {active === "audit" && <Table title="Audit Trail" rows={data["audit-logs"] ?? []} />}
+        {evidenceTitle && (
+          <EvidencePanel title={evidenceTitle} rows={evidenceRows} onClose={() => setEvidenceTitle("")} />
+        )}
       </section>
     </main>
+  );
+}
+
+function Incidents({
+  incidents,
+  onCreateReport,
+  onShowEvidence,
+}: {
+  incidents: Incident[];
+  onCreateReport: (id: number) => void;
+  onShowEvidence: (kind: "incidents" | "reports", id: number) => void;
+}) {
+  return (
+    <section className="list">
+      <h3>Incidents</h3>
+      {incidents.map((incident) => (
+        <article className="item" key={incident.id}>
+          <div>
+            <strong>{incident.title}</strong>
+            <p>{incident.incident_type} | {incident.severity} | evidence {incident.evidence_ids.join(", ")}</p>
+          </div>
+          <div className="decisionActions">
+            <button onClick={() => onShowEvidence("incidents", incident.id)}>Evidence</button>
+            <button onClick={() => onCreateReport(incident.id)}>Generate report</button>
+          </div>
+        </article>
+      ))}
+      {incidents.length === 0 && <Empty text="No incidents. Connect data through the protected ingestion API." />}
+    </section>
+  );
+}
+
+function Reports({ rows, onShowEvidence }: { rows: ReportRow[]; onShowEvidence: (kind: "incidents" | "reports", id: number) => void }) {
+  return (
+    <section className="list">
+      <h3>AI Reports</h3>
+      {rows.map((row) => (
+        <article className="item" key={row.id}>
+          <div>
+            <strong>Report {row.id} for incident {row.incident_id}</strong>
+            <p>{row.validation_status} | approval {row.human_approval_required ? "required" : "not required"} | created {row.created_at}</p>
+          </div>
+          <button onClick={() => onShowEvidence("reports", row.id)}>Evidence</button>
+        </article>
+      ))}
+      {rows.length === 0 && <Empty text="No AI reports yet." />}
+    </section>
+  );
+}
+
+function EvidencePanel({ title, rows, onClose }: { title: string; rows: Row[]; onClose: () => void }) {
+  return (
+    <section className="evidencePanel">
+      <div className="panelHeader">
+        <h3>{title}</h3>
+        <button onClick={onClose}>Close</button>
+      </div>
+      {rows.length === 0 ? (
+        <Empty text="No evidence rows found." />
+      ) : (
+        rows.map((row) => (
+          <article className="evidenceRow" key={String(row.id)}>
+            <strong>{String(row.evidence_type ?? "evidence")}</strong>
+            <p>{String(row.summary ?? "")}</p>
+            <pre>{JSON.stringify(row.payload ?? row, null, 2)}</pre>
+          </article>
+        ))
+      )}
+    </section>
   );
 }
 

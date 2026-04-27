@@ -31,6 +31,17 @@ def test_incident_dedupe(client, auth_headers):
     assert incidents[0]["occurrence_count"] == 2
 
 
+def test_operator_can_retrieve_incident_evidence(client, auth_headers):
+    payload = {"service_name": "evidence-api", "cpu_usage": 95, "memory_usage": 88, "response_time_ms": 1200, "error_rate": 8}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+    response = client.get(f"/incidents/{incident_id}/evidence")
+    assert response.status_code == 200
+    evidence = response.json()
+    assert len(evidence) == 1
+    assert evidence[0]["evidence_type"] == "metric_threshold_breach"
+    assert evidence[0]["payload"]["response_time_ms"] == 1200
+
+
 def test_empty_evidence_prevents_llm_hallucinated_report(client):
     with database.SessionLocal() as session:
         incident = Incident(
@@ -85,6 +96,15 @@ def test_high_risk_recommendations_remain_pending(client, auth_headers):
     assert response.json()["human_approval_required"] is True
     approvals = client.get("/approvals").json()
     assert approvals[0]["status"] == "pending"
+
+
+def test_operator_can_retrieve_report_evidence(client, auth_headers):
+    payload = {"service_name": "report-evidence-api", "cpu_usage": 95, "memory_usage": 91, "response_time_ms": 1300, "error_rate": 7}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+    report_id = client.post(f"/incidents/{incident_id}/reports", json={}).json()["report_id"]
+    response = client.get(f"/reports/{report_id}/evidence")
+    assert response.status_code == 200
+    assert response.json()[0]["incident_id"] == incident_id
 
 
 def test_external_intel_context_does_not_create_incidents(client):

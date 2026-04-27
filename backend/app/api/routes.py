@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import rate_limit, require_ingest_api_key
 from app.core.database import get_session
-from app.models.records import AccessLog, Approval, AuditLog, Incident, OperationalReport, SystemMetric
+from app.models.records import AccessLog, Approval, AuditLog, EvidenceLog, Incident, OperationalReport, SystemMetric
 from app.schemas.records import AccessLogIn, ApprovalDecisionIn, IncidentOut, MetricIn, ReportRequest
 from app.services.audit import audit
 from app.services.detection import ingest_access_log, ingest_metric
@@ -50,6 +50,25 @@ def list_incidents(session: Session = Depends(get_session)):
     return session.scalars(select(Incident).order_by(desc(Incident.updated_at))).all()
 
 
+@router.get("/incidents/{incident_id}")
+def get_incident(incident_id: int, session: Session = Depends(get_session)) -> dict:
+    incident = session.get(Incident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return _row_dict(incident)
+
+
+@router.get("/incidents/{incident_id}/evidence")
+def list_incident_evidence(incident_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    incident = session.get(Incident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="incident not found")
+    if not incident.evidence_ids:
+        return []
+    rows = session.scalars(select(EvidenceLog).where(EvidenceLog.id.in_(incident.evidence_ids)).order_by(desc(EvidenceLog.created_at))).all()
+    return [_row_dict(row) for row in rows]
+
+
 @router.post("/incidents/{incident_id}/reports")
 def create_report(incident_id: int, payload: ReportRequest | None = None, session: Session = Depends(get_session)) -> dict:
     try:
@@ -64,6 +83,25 @@ def create_report(incident_id: int, payload: ReportRequest | None = None, sessio
 @router.get("/reports")
 def list_reports(session: Session = Depends(get_session)) -> list[dict]:
     rows = session.scalars(select(OperationalReport).order_by(desc(OperationalReport.created_at))).all()
+    return [_row_dict(row) for row in rows]
+
+
+@router.get("/reports/{report_id}")
+def get_report(report_id: int, session: Session = Depends(get_session)) -> dict:
+    report = session.get(OperationalReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    return _row_dict(report)
+
+
+@router.get("/reports/{report_id}/evidence")
+def list_report_evidence(report_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    report = session.get(OperationalReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    if not report.evidence_ids:
+        return []
+    rows = session.scalars(select(EvidenceLog).where(EvidenceLog.id.in_(report.evidence_ids)).order_by(desc(EvidenceLog.created_at))).all()
     return [_row_dict(row) for row in rows]
 
 

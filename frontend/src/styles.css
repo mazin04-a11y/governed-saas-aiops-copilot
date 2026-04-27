@@ -223,6 +223,53 @@ nav button:hover {
   gap: 14px;
 }
 
+.evidencePanel {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #c9d4cc;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.panelHeader button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #21312a;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.evidenceRow {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #e8ece5;
+  padding-top: 12px;
+}
+
+.evidenceRow pre {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #1f2522;
+  color: #edf4ee;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
