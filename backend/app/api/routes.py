@@ -1,4 +1,3 @@
-from datetime import datetime
 import csv
 import hmac
 import io
@@ -10,9 +9,10 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import create_operator_token, rate_limit, require_ingest_api_key, require_operator_session
-from app.core.database import get_session
-from app.models.records import AccessLog, Approval, AuditLog, EvidenceLog, Incident, OperationalReport, SystemMetric
 from app.core.config import get_settings
+from app.core.database import get_session
+from app.core.time import utc_now
+from app.models.records import AccessLog, Approval, AuditLog, EvidenceLog, Incident, OperationalReport, SystemMetric
 from app.schemas.records import (
     AccessLogIn,
     ApprovalDecisionIn,
@@ -162,7 +162,7 @@ def update_incident_status(incident_id: int, payload: IncidentStatusUpdate, sess
     if not incident:
         raise HTTPException(status_code=404, detail="incident not found")
     incident.status = payload.status
-    incident.updated_at = datetime.utcnow()
+    incident.updated_at = utc_now()
     audit(
         session,
         f"incident_{payload.status}",
@@ -237,7 +237,7 @@ def decide_approval(approval_id: int, payload: ApprovalDecisionIn, session: Sess
     approval.status = payload.status
     approval.reviewer = payload.reviewer
     approval.decision_reason = payload.decision_reason
-    approval.decided_at = datetime.utcnow()
+    approval.decided_at = utc_now()
     if report:
         report.human_approved = payload.status == "approved"
     audit(

@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.models.records import AccessLog, EvidenceLog, Incident, SystemMetric
 from app.schemas.records import AccessLogIn, MetricIn
 from app.services.audit import audit
@@ -106,7 +105,7 @@ def _upsert_incident(
     session.flush()
     if incident:
         incident.occurrence_count += 1
-        incident.updated_at = datetime.utcnow()
+        incident.updated_at = utc_now()
         incident.evidence_ids = [*incident.evidence_ids, evidence.id]
         evidence.incident_id = incident.id
         audit(session, "incident_deduped", "deterministic_detector", "incident", incident.id, {"evidence_id": evidence.id})

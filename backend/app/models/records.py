@@ -4,6 +4,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, Stri
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class SystemMetric(Base):
@@ -16,7 +17,7 @@ class SystemMetric(Base):
     response_time_ms: Mapped[int] = mapped_column(Integer)
     error_rate: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(50), default="healthy")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class AccessLog(Base):
@@ -27,7 +28,7 @@ class AccessLog(Base):
     action: Mapped[str] = mapped_column(String(80))
     ip_address: Mapped[str] = mapped_column(String(80), index=True)
     outcome: Mapped[str] = mapped_column(String(50), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class Incident(Base):
@@ -42,8 +43,8 @@ class Incident(Base):
     description: Mapped[str] = mapped_column(Text)
     evidence_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
     occurrence_count: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
 class EvidenceLog(Base):
@@ -56,7 +57,7 @@ class EvidenceLog(Base):
     source_id: Mapped[int] = mapped_column(Integer)
     summary: Mapped[str] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class OperationalReport(Base):
@@ -74,7 +75,7 @@ class OperationalReport(Base):
     human_approval_required: Mapped[bool] = mapped_column(Boolean, default=False)
     human_approved: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     evidence_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class Approval(Base):
@@ -85,8 +86,8 @@ class Approval(Base):
     status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
     reviewer: Mapped[str | None] = mapped_column(String(120), nullable=True)
     decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AuditLog(Base):
@@ -98,4 +99,4 @@ class AuditLog(Base):
     entity_type: Mapped[str] = mapped_column(String(120))
     entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     details: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
