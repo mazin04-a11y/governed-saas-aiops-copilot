@@ -34,7 +34,7 @@ Status: planned.
 - Add reviewer identity support instead of the current demo `operator` reviewer.
 - Add approval history views per report and incident.
 - Add explicit risk policy rules for remediation classes.
-- Add report regeneration controls with version history.
+- Report versioning is implemented for regenerated incident reports.
 - Audit CSV export is implemented for V-Model validation evidence.
 
 ## Phase 4: Production Hardening

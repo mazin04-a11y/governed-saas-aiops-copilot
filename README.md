@@ -65,6 +65,7 @@ PostgreSQL audits.
   - `ExternalIntelAgent`
   - `RemediationReviewerAgent`
 - Pydantic operational report schema validation
+- report versioning for regenerated incident reports
 - high-risk recommendation approval queue
 - dashboard approval and rejection actions
 - append-only audit trail for ingestion, incident creation, report saving, and approval decisions

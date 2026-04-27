@@ -138,6 +138,16 @@ def test_operator_can_retrieve_report_evidence(client, auth_headers):
     assert response.json()[0]["incident_id"] == incident_id
 
 
+def test_regenerated_reports_increment_version(client, auth_headers):
+    payload = {"service_name": "versioned-api", "cpu_usage": 95, "memory_usage": 91, "response_time_ms": 1300, "error_rate": 7}
+    incident_id = client.post("/metrics/ingest", json=payload, headers=auth_headers).json()["incident_id"]
+    first = client.post(f"/incidents/{incident_id}/reports", json={}).json()["report_id"]
+    second = client.post(f"/incidents/{incident_id}/reports", json={}).json()["report_id"]
+    reports = {row["id"]: row for row in client.get("/reports").json()}
+    assert reports[first]["report_version"] == 1
+    assert reports[second]["report_version"] == 2
+
+
 def test_external_intel_context_does_not_create_incidents(client):
     response = client.get("/incidents")
     assert response.status_code == 200

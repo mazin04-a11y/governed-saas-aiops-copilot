@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -84,8 +84,17 @@ def run_report_workflow(session: Session, incident_id: int, use_external_intel: 
     def save_node(state: WorkflowState) -> WorkflowState:
         parsed = state["parsed_report"]
         approval_required = state["approval_required"]
+        next_version = (
+            session.scalar(
+                select(func.coalesce(func.max(OperationalReport.report_version), 0) + 1).where(
+                    OperationalReport.incident_id == state["incident_id"]
+                )
+            )
+            or 1
+        )
         report = OperationalReport(
             incident_id=state["incident_id"],
+            report_version=next_version,
             model_name=settings.openai_model,
             prompt_version=settings.prompt_version,
             schema_version=settings.schema_version,

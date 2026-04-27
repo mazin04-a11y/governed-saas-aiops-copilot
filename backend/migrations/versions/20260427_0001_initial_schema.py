@@ -153,4 +153,3 @@ def downgrade() -> None:
     op.drop_table("access_logs")
     op.drop_index(op.f("ix_system_metrics_service_name"), table_name="system_metrics")
     op.drop_table("system_metrics")
-

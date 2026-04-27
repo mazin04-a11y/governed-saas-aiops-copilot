@@ -38,6 +38,7 @@ type ApprovalRow = Row & {
 type ReportRow = Row & {
   id: number;
   incident_id: number;
+  report_version: number;
   validation_status: string;
   human_approval_required: boolean;
   human_approved?: boolean | null;
@@ -277,7 +278,7 @@ function Reports({ rows, onShowEvidence }: { rows: ReportRow[]; onShowEvidence: 
       {rows.map((row) => (
         <article className="item" key={row.id}>
           <div>
-            <strong>Report {row.id} for incident {row.incident_id}</strong>
+            <strong>Report {row.id} v{row.report_version} for incident {row.incident_id}</strong>
             <p>{row.validation_status} | approval {row.human_approval_required ? "required" : "not required"} | created {row.created_at}</p>
           </div>
           <button onClick={() => onShowEvidence("reports", row.id)}>Evidence</button>
