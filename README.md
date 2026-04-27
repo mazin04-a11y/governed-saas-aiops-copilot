@@ -12,7 +12,7 @@ Build a real SaaS monitoring copilot, not a simulator:
 - Detect incidents with deterministic code before any LLM reasoning runs.
 - Build evidence bundles from stored relational data.
 - Use LangGraph as the durable workflow control layer.
-- Use CrewAI-style specialist agents inside selected workflow nodes.
+- Use CrewAI specialist tasks inside selected workflow nodes when configured.
 - Generate structured operational reports with OpenAI-compatible output.
 - Validate every report with Pydantic before persistence.
 - Require human approval for high-risk recommendations.
@@ -67,6 +67,9 @@ PostgreSQL audits.
   - `SecurityAnalystAgent`
   - `ExternalIntelAgent`
   - `RemediationReviewerAgent`
+- real CrewAI sequential task execution in `RunCrewAIAnalysis` when `crewai` is installed,
+  `CREWAI_EXECUTION_ENABLED=true`, and `OPENAI_API_KEY` is configured
+- deterministic CrewAI analysis fallback for local development and CI
 - Pydantic operational report schema validation
 - report versioning for regenerated incident reports
 - high-risk recommendation approval queue
@@ -95,6 +98,7 @@ INGEST_API_KEYS=local-dev-ingest-key
 OPERATOR_API_KEYS=
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
+CREWAI_EXECUTION_ENABLED=true
 SERPER_API_KEY=
 RATE_LIMIT_REQUESTS=120
 RATE_LIMIT_WINDOW_SECONDS=60

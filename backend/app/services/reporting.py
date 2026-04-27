@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, TypedDict
 
 from pydantic import ValidationError
@@ -169,7 +170,20 @@ def _compile_workflow(build_node, crew_node, validate_node, safety_node, approva
 
 
 def run_crew_analysis(incident: Incident | None, evidence: list[dict[str, Any]], external_context: dict[str, Any] | None = None) -> dict[str, Any]:
-    agents = [
+    settings = get_settings()
+    agents = _crew_agent_specs()
+    if not settings.crewai_execution_enabled:
+        return _deterministic_crew_analysis(incident, evidence, external_context, agents, "crewai_disabled")
+    if not settings.openai_api_key:
+        return _deterministic_crew_analysis(incident, evidence, external_context, agents, "openai_api_key_not_configured")
+    try:
+        return _run_crewai_tasks(incident, evidence, external_context, agents, settings.openai_api_key, settings.openai_model)
+    except Exception as exc:
+        return _deterministic_crew_analysis(incident, evidence, external_context, agents, f"crewai_unavailable:{exc.__class__.__name__}")
+
+
+def _crew_agent_specs() -> list[dict[str, str]]:
+    return [
         {
             "name": "ManagerAgent",
             "role": "Hierarchical crew manager",
@@ -201,17 +215,142 @@ def run_crew_analysis(incident: Incident | None, evidence: list[dict[str, Any]],
             "backstory": "A change-management reviewer who keeps production blast radius visible.",
         },
     ]
-    try:
-        from crewai import Agent  # noqa: F401
-    except Exception:
-        pass
+
+
+def _deterministic_crew_analysis(
+    incident: Incident | None,
+    evidence: list[dict[str, Any]],
+    external_context: dict[str, Any] | None,
+    agents: list[dict[str, str]],
+    fallback_reason: str,
+) -> dict[str, Any]:
     return {
         "crew_mode": "deterministic-fallback",
+        "fallback_reason": fallback_reason,
         "agents": agents,
         "incident_title": incident.title if incident else "Unknown incident",
         "evidence_count": len(evidence),
         "external_context": external_context or {"status": "skipped", "items": []},
     }
+
+
+def _run_crewai_tasks(
+    incident: Incident | None,
+    evidence: list[dict[str, Any]],
+    external_context: dict[str, Any] | None,
+    agent_specs: list[dict[str, str]],
+    openai_api_key: str,
+    openai_model: str,
+) -> dict[str, Any]:
+    from crewai import Agent, Crew, Process, Task
+
+    previous_api_key = os.environ.get("OPENAI_API_KEY")
+    previous_model = os.environ.get("OPENAI_MODEL_NAME")
+    os.environ["OPENAI_API_KEY"] = openai_api_key
+    os.environ.setdefault("OPENAI_MODEL_NAME", openai_model)
+    try:
+        agent_by_name = {
+            spec["name"]: Agent(
+                role=spec["role"],
+                goal=spec["goal"],
+                backstory=spec["backstory"],
+                verbose=False,
+                allow_delegation=spec["name"] == "ManagerAgent",
+            )
+            for spec in agent_specs
+        }
+        incident_summary = {
+            "id": incident.id if incident else None,
+            "title": incident.title if incident else "Unknown incident",
+            "type": incident.incident_type if incident else "unknown",
+            "severity": incident.severity if incident else "unknown",
+            "description": incident.description if incident else "",
+        }
+        evidence_summary = [
+            {"id": item["id"], "type": item["type"], "summary": item["summary"], "payload": item.get("payload", {})}
+            for item in evidence
+        ]
+        external_summary = external_context or {"status": "skipped", "items": []}
+        shared_context = (
+            f"Incident: {incident_summary}\n"
+            f"Stored evidence: {evidence_summary}\n"
+            f"External context: {external_summary}\n"
+            "Rules: use only stored evidence IDs, do not create incidents, and treat external context as provenance only."
+        )
+        task_specs = [
+            (
+                "performance_analysis",
+                "Identify performance signals and user-impact hypotheses supported by stored metric evidence.",
+                "A concise evidence-grounded performance assessment with cited evidence IDs.",
+                "PerformanceAnalystAgent",
+            ),
+            (
+                "security_analysis",
+                "Identify authentication or access-pattern risk supported by stored access-log evidence.",
+                "A concise evidence-grounded security assessment with cited evidence IDs.",
+                "SecurityAnalystAgent",
+            ),
+            (
+                "external_context_review",
+                "Summarize any optional external context and clearly state that it is not an incident source.",
+                "A provenance-aware external context note.",
+                "ExternalIntelAgent",
+            ),
+            (
+                "remediation_review",
+                "Review likely remediation themes and flag production-impacting actions for human approval.",
+                "A remediation risk review with approval-sensitive actions called out.",
+                "RemediationReviewerAgent",
+            ),
+            (
+                "manager_synthesis",
+                "Synthesize the specialist findings into a governed report brief without unsupported claims.",
+                "A final governed synthesis that preserves evidence discipline and approval boundaries.",
+                "ManagerAgent",
+            ),
+        ]
+        tasks = [
+            Task(
+                description=f"{description}\n\n{shared_context}",
+                expected_output=expected_output,
+                agent=agent_by_name[agent_name],
+            )
+            for _, description, expected_output, agent_name in task_specs
+        ]
+        crew = Crew(
+            agents=list(agent_by_name.values()),
+            tasks=tasks,
+            process=Process.sequential,
+            verbose=False,
+        )
+        output = crew.kickoff()
+    finally:
+        if previous_api_key is None:
+            os.environ.pop("OPENAI_API_KEY", None)
+        else:
+            os.environ["OPENAI_API_KEY"] = previous_api_key
+        if previous_model is None:
+            os.environ.pop("OPENAI_MODEL_NAME", None)
+        else:
+            os.environ["OPENAI_MODEL_NAME"] = previous_model
+
+    task_outputs = _serialize_crewai_task_outputs(getattr(output, "tasks_output", None))
+    return {
+        "crew_mode": "crewai-executed",
+        "agents": agent_specs,
+        "incident_title": incident.title if incident else "Unknown incident",
+        "evidence_count": len(evidence),
+        "external_context": external_context or {"status": "skipped", "items": []},
+        "task_names": [name for name, *_ in task_specs],
+        "task_outputs": task_outputs,
+        "final_output": getattr(output, "raw", str(output)),
+    }
+
+
+def _serialize_crewai_task_outputs(task_outputs: Any) -> list[str]:
+    if not task_outputs:
+        return []
+    return [getattr(task_output, "raw", str(task_output)) for task_output in task_outputs]
 
 
 def generate_structured_output(

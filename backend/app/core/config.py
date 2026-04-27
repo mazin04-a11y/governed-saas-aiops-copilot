@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     operator_api_keys: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
+    crewai_execution_enabled: bool = True
     serper_api_key: str | None = None
     rate_limit_requests: int = Field(default=120, ge=1)
     rate_limit_window_seconds: int = Field(default=60, ge=1)

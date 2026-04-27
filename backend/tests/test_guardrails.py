@@ -1,8 +1,11 @@
+import sys
+from types import SimpleNamespace
+
 from app.core import database
 from app.core.config import get_settings
 from app.models.records import Incident
 from app.schemas.records import OperationalReportPayload
-from app.services.reporting import generate_structured_output, run_report_workflow
+from app.services.reporting import generate_structured_output, run_crew_analysis, run_report_workflow
 from app.services.risk_policy import recommendation_requires_approval
 from pydantic import ValidationError
 
@@ -118,6 +121,100 @@ def test_unsafe_remediation_requires_approval_or_rejection():
     report = OperationalReportPayload.model_validate(raw)
     assert report.recommendations[0].risk_level == "high"
     assert report.recommendations[0].requires_human_approval is True
+
+
+def test_crewai_analysis_uses_deterministic_fallback_without_openai_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    get_settings.cache_clear()
+    try:
+        incident = Incident(
+            incident_type="performance",
+            title="Fallback incident",
+            severity="high",
+            correlation_key="test:fallback",
+            description="A fallback test incident.",
+            evidence_ids=[1],
+        )
+        analysis = run_crew_analysis(
+            incident,
+            [{"id": 1, "type": "metric_threshold_breach", "summary": "latency threshold breached", "payload": {}}],
+        )
+    finally:
+        get_settings.cache_clear()
+    assert analysis["crew_mode"] == "deterministic-fallback"
+    assert analysis["fallback_reason"] == "openai_api_key_not_configured"
+    assert {agent["name"] for agent in analysis["agents"]} == {
+        "ManagerAgent",
+        "PerformanceAnalystAgent",
+        "SecurityAnalystAgent",
+        "ExternalIntelAgent",
+        "RemediationReviewerAgent",
+    }
+
+
+def test_crewai_analysis_runs_real_tasks_when_configured(monkeypatch):
+    created = {"agents": [], "tasks": [], "crew": None}
+
+    class FakeAgent:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            created["agents"].append(kwargs)
+
+    class FakeTask:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            created["tasks"].append(kwargs)
+
+    class FakeCrew:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            created["crew"] = kwargs
+
+        def kickoff(self):
+            return SimpleNamespace(
+                raw="manager synthesis",
+                tasks_output=[SimpleNamespace(raw=f"task-output-{index}") for index in range(len(self.kwargs["tasks"]))],
+            )
+
+    fake_crewai = SimpleNamespace(
+        Agent=FakeAgent,
+        Task=FakeTask,
+        Crew=FakeCrew,
+        Process=SimpleNamespace(sequential="sequential"),
+    )
+    monkeypatch.setitem(sys.modules, "crewai", fake_crewai)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.delenv("OPENAI_MODEL_NAME", raising=False)
+    get_settings.cache_clear()
+    try:
+        incident = Incident(
+            incident_type="security",
+            title="Configured incident",
+            severity="high",
+            correlation_key="test:configured",
+            description="A configured CrewAI test incident.",
+            evidence_ids=[3],
+        )
+        analysis = run_crew_analysis(
+            incident,
+            [{"id": 3, "type": "failed_login_cluster", "summary": "failed login cluster", "payload": {"count": 5}}],
+            {"status": "ok", "items": [{"title": "Vendor status"}]},
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert analysis["crew_mode"] == "crewai-executed"
+    assert analysis["task_names"] == [
+        "performance_analysis",
+        "security_analysis",
+        "external_context_review",
+        "remediation_review",
+        "manager_synthesis",
+    ]
+    assert analysis["task_outputs"][-1] == "task-output-4"
+    assert len(created["agents"]) == 5
+    assert len(created["tasks"]) == 5
+    assert created["crew"]["process"] == "sequential"
 
 
 def test_policy_flags_production_recommendations_for_approval():
